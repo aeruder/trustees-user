@@ -39,12 +39,12 @@ static int trustee_s_hash_size = 0, trustee_s_hash_used = 0,
 /* This is a hash keyed on device/filename.  The hash elements
  * hold the actual permissions for that device/filename.
  */
-DECLARE_RWSEM(trustee_hash_sem);
+rwlock_t trustee_hash_lock = RW_LOCK_UNLOCKED;
 static struct trustee_hash_element *trustee_hash = NULL;
 static int trustee_hash_size = 0, trustee_hash_used =
     0, trustee_hash_deleted = 0;
 
-DECLARE_RWSEM(trustee_ic_sem);
+rwlock_t trustee_ic_lock = RW_LOCK_UNLOCKED;
 static struct trustee_ic *trustee_ic_list = NULL;
 
 #define FN_CHUNK_SIZE 50
@@ -60,11 +60,6 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 	char c;
 	int i, j, k;
 	int depth = 0;
-
-	if (!dentry) {
-		TS_DEBUG_MSG("dentry nil\n");
-		return NULL;
-	}
 
 	if (dentry->d_parent == NULL) {
 		TS_DEBUG_MSG("d_parent is null\n");
@@ -99,7 +94,7 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 				    ("Out of memory allocating tmpbuf\n");
 				return NULL;
 			}
-			strcpy(tmpbuf, buffer);
+			memcpy(tmpbuf, buffer, i);
 			kfree(buffer);
 			buffer = tmpbuf;
 		}
@@ -168,20 +163,20 @@ static inline void add_ic_dev(dev_t dev, char __user *devname)
 	ic->dev = dev;
 	ic->devname = devname2;
 
-	down_write(&trustee_ic_sem);
+	write_lock(&trustee_ic_lock);
 	ic->next = trustee_ic_list;
 	trustee_ic_list = ic;
-	up_write(&trustee_ic_sem);
+	write_unlock(&trustee_ic_lock);
 }
 
 static inline void remove_ic_devs(void)
 {
 	struct trustee_ic *ic, *iter, *next;;
 
-	down_write(&trustee_ic_sem);
+	write_lock(&trustee_ic_lock);
 	ic = trustee_ic_list;
 	trustee_ic_list = NULL;
-	up_write(&trustee_ic_sem);
+	write_unlock(&trustee_ic_lock);
 
 	for (iter = ic; (iter); iter = next) {
 		next = iter->next;
@@ -276,19 +271,19 @@ static struct trustee_hash_element *get_trustee_for_name(const struct
 	if (trustee_hash == NULL)
 		return NULL;
 
-	down_read(&trustee_hash_sem);
+	read_lock(&trustee_hash_lock);
 
 	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage;
 	     i = (i + 1) % trustee_hash_size) {
 		if (trustee_hash[i].usage == 1)
 			continue;
 		if (trustee_name_cmp(&trustee_hash[i].name, name)) {
-			up_read(&trustee_hash_sem);
+			read_unlock(&trustee_hash_lock);
 			return trustee_hash + i;
 		}
 	}
 
-	up_read(&trustee_hash_sem);
+	read_unlock(&trustee_hash_lock);
 
 	return NULL;
 
@@ -310,7 +305,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	if (trustee_hash == NULL) {
 		TS_DEBUG_MSG("Building new trustee hash\n");
 
-		down_write(&trustee_hash_sem);
+		write_lock(&trustee_hash_lock);
 		trustee_hash =
 		    kmalloc(sizeof(struct trustee_hash_element) *
 			    TRUSTEE_INITIAL_HASH_SIZE, GFP_KERNEL);
@@ -319,7 +314,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 			TS_DEBUG_MSG
 			    ("Can not allocate memory for trustee hash\n");
 
-			up_write(&trustee_hash_sem);
+			write_unlock(&trustee_hash_lock);
 			return r;
 		}
 		trustee_hash_size = TRUSTEE_INITIAL_HASH_SIZE;
@@ -327,9 +322,9 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_deleted = 0;
 		for (i = 0; i < trustee_hash_size; i++)
 			trustee_hash[i].usage = 0;
-		up_write(&trustee_hash_sem);
+		write_unlock(&trustee_hash_lock);
 	} else if ((trustee_hash_size * 3 / 4 < trustee_hash_used) || (trustee_hash_size - 2 < trustee_hash_used)) {	/*hash needed to be rebuilt, rebuilding hash */
-		down_write(&trustee_hash_sem);
+		write_lock(&trustee_hash_lock);
 		newsize =
 		    (trustee_hash_deleted * 3) >
 		    trustee_hash_size ? trustee_hash_size :
@@ -346,7 +341,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 			TS_DEBUG_MSG
 			    ("Can not allocate memory for trustee hash\n");
 
-			up_write(&trustee_hash_sem);
+			write_unlock(&trustee_hash_lock);
 			return r;
 		}
 		for (i = 0; i < newsize; i++)
@@ -365,9 +360,9 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash = n;
 		trustee_hash_size = newsize;
 		trustee_hash_deleted = 0;
-		up_write(&trustee_hash_sem);
+		write_unlock(&trustee_hash_lock);
 	}
-	down_read(&trustee_hash_sem);
+	read_lock(&trustee_hash_lock);
 
 	for (j = hash(name) % trustee_hash_size;
 	     trustee_hash[j].usage == 2; j = (j + 1) % trustee_hash_size);
@@ -381,7 +376,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		     r->name.filename);
 
 	trustee_hash_used++;
-	up_read(&trustee_hash_sem);
+	read_unlock(&trustee_hash_lock);
 
 	return r;
 }
@@ -448,7 +443,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	trustee_name.devname = mnt->mnt_devname;
 	trustee_name.filename = file_name;
 
-	down_read(&trustee_ic_sem);
+	read_lock(&trustee_ic_lock);
 	for (iter = trustee_ic_list; (iter); iter = iter->next) {
 		if (trustee_dev_cmp
 		    (iter->dev, trustee_name.dev, iter->devname,
@@ -457,7 +452,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 			break;
 		}
 	}
-	up_read(&trustee_ic_sem);
+	read_unlock(&trustee_ic_lock);
 
 	filecount = file_name + 1;
 	for (;;) {
@@ -485,14 +480,14 @@ static void trustees_clear_all(void)
 	int i;
 	if (!trustee_hash)
 		return;
-	down_write(&trustee_hash_sem);
+	write_lock(&trustee_hash_lock);
 	for (i = 0; i < trustee_hash_size; i++) {
 		if (trustee_hash[i].usage == 2)
 			free_hash_element(trustee_hash[i]);
 	}
 	kfree(trustee_hash);
 	trustee_hash = NULL;
-	up_write(&trustee_hash_sem);
+	write_unlock(&trustee_hash_lock);
 
 	remove_ic_devs();
 }
