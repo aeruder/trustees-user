@@ -172,7 +172,7 @@ static int trustees_inode_link (struct dentry *old_dentry,
 		return 0;
 	}
 
-	return -EPERM;
+	return -EXDEV;
 }
 
 /* Don't allow people to move hardlinked files into another directory.
@@ -183,8 +183,9 @@ static int trustees_inode_rename (struct inode *old_dir, struct dentry *old_dent
 	
 	if (S_ISDIR(old_dentry->d_inode->i_mode)) return 0;
 
-	if (old_dentry->d_parent != new_dentry->d_parent) {
-		return -EPERM;
+	if (old_dentry->d_inode->i_nlink > 1 && 
+	    old_dentry->d_parent != new_dentry->d_parent) {
+		return -EXDEV;
 	}
 
 	return 0;
