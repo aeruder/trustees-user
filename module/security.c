@@ -44,12 +44,94 @@ static int trustees_capable(struct task_struct *tsk, int cap);
 static int trustees_inode_permission(struct inode *inode,
 				     int mask, struct nameidata *nd);
 
-static inline int has_root_perm(struct inode *inode, int mask);
-static inline int has_unix_perm(struct inode *inode, int mask);
+/* Checks if user has access to the inode due to root status
+ */
+static inline int has_root_perm(struct inode *inode, int mask)
+{
+	umode_t mode = inode->i_mode;
+
+	if (!(mask & MAY_EXEC) || (mode & S_IXUGO) || S_ISDIR(mode))
+		if (current->fsuid == 0)
+			return 0;
+
+	return -EACCES;
+}
+
+/* The logic for this was mostly stolen from vfs_permission.  The security API
+ * doesn't give a good way to use the actual vfs_permission for this since our
+ * CAP_DAC_OVERRIDE causes it to always return 0.  But if we didn't return
+ * CAP_DAC_OVERRIDE, we'd never get to handle permissions!  Since we don't need
+ * to handle capabilities and dealing with ACLs with trustees loaded isn't an
+ * issue for me, the function ends up being pretty simple.
+ */
+
+static inline int has_unix_perm(struct inode *inode, int mask)
+{
+	umode_t mode = inode->i_mode;
+	mask &= ~MAY_APPEND;
+
+	if (current->fsuid == inode->i_uid)
+		mode >>= 6;
+	else if (in_group_p(inode->i_gid))
+		mode >>= 3;
+
+	if (((mode & mask & (MAY_READ | MAY_WRITE | MAY_EXEC)) == mask))
+		return 0;
+
+	return -EACCES;
+}
+
+/* Find a vfsmount given an inode */
 static inline struct vfsmount *find_inode_mnt(struct inode *inode,
-					      struct nameidata *nd);
+					      struct nameidata *nd)
+{
+	struct namespace *ns;
+	struct vfsmount *mnt = NULL;
+
+	if (likely(nd))
+		return mntget(nd->mnt);
+
+	/* Okay, we need to find the vfsmount by looking
+	 * at the namespace now.
+	 */
+
+	task_lock(current);
+
+	/* debug */
+	if (unlikely(!current->namespace))
+		goto out_wo_ns;
+	ns = current->namespace;
+	down_read(&ns->sem);
+
+	list_for_each_entry(mnt, &ns->list, mnt_list) {
+		if (mnt->mnt_sb == inode->i_sb) {
+			mntget(mnt);
+			goto out;
+		}
+	}
+
+      out:
+	up_read(&ns->sem);
+      out_wo_ns:
+	task_unlock(current);
+
+	return mnt;
+}
+
+/* Find a dentry given an inode */
 static inline struct dentry *find_inode_dentry(struct inode *inode,
-					       struct nameidata *nd);
+					       struct nameidata *nd)
+{
+	struct dentry *dentry;
+
+	if (likely(nd))
+		return dget(nd->dentry);
+
+	dentry = d_find_alias(inode);
+
+	return dentry;
+}
+
 static int trustees_inode_rename(struct inode *old_dir,
 				 struct dentry *old_dentry,
 				 struct inode *new_dir,
@@ -121,6 +203,7 @@ static int trustees_inode_permission(struct inode *inode,
 		 * I'm really not sure how it happens.
 		 */
 		if (inode == mnt->mnt_root->d_inode) {
+			printk(KERN_ERR "Trustees: getting a dentry of the mnt_root\n");
 			dentry = dget(mnt->mnt_root);
 		} else {
 			/* I have seen this happen once but I did not have any
@@ -287,92 +370,4 @@ void trustees_deinit_security(void)
 	}
 
 	TS_DEBUG_MSG("Security component unregistered\n");
-}
-
-/* Checks if user has access to the inode due to root status
- */
-static inline int has_root_perm(struct inode *inode, int mask)
-{
-	umode_t mode = inode->i_mode;
-
-	if (!(mask & MAY_EXEC) || (mode & S_IXUGO) || S_ISDIR(mode))
-		if (current->fsuid == 0)
-			return 0;
-
-	return -EACCES;
-}
-
-/* The logic for this was mostly stolen from vfs_permission.  The security API
- * doesn't give a good way to use the actual vfs_permission for this since our
- * CAP_DAC_OVERRIDE causes it to always return 0.  But if we didn't return
- * CAP_DAC_OVERRIDE, we'd never get to handle permissions!  Since we don't need
- * to handle capabilities and dealing with ACLs with trustees loaded isn't an
- * issue for me, the function ends up being pretty simple.
- */
-
-static inline int has_unix_perm(struct inode *inode, int mask)
-{
-	umode_t mode = inode->i_mode;
-	mask &= ~MAY_APPEND;
-
-	if (current->fsuid == inode->i_uid)
-		mode >>= 6;
-	else if (in_group_p(inode->i_gid))
-		mode >>= 3;
-
-	if (((mode & mask & (MAY_READ | MAY_WRITE | MAY_EXEC)) == mask))
-		return 0;
-
-	return -EACCES;
-}
-
-/* Find a vfsmount given an inode */
-static inline struct vfsmount *find_inode_mnt(struct inode *inode,
-					      struct nameidata *nd)
-{
-	struct namespace *ns;
-	struct vfsmount *mnt = NULL;
-
-	if (likely(nd))
-		return mntget(nd->mnt);
-
-	/* Okay, we need to find the vfsmount by looking
-	 * at the namespace now.
-	 */
-
-	task_lock(current);
-
-	/* debug */
-	if (unlikely(!current->namespace))
-		goto out_wo_ns;
-	ns = current->namespace;
-	down_read(&ns->sem);
-
-	list_for_each_entry(mnt, &ns->list, mnt_list) {
-		if (mnt->mnt_sb == inode->i_sb) {
-			mntget(mnt);
-			goto out;
-		}
-	}
-
-      out:
-	up_read(&ns->sem);
-      out_wo_ns:
-	task_unlock(current);
-
-	return mnt;
-}
-
-/* Find a dentry given an inode */
-static inline struct dentry *find_inode_dentry(struct inode *inode,
-					       struct nameidata *nd)
-{
-	struct dentry *dentry;
-
-	if (likely(nd))
-		return dget(nd->dentry);
-
-	dentry = d_find_alias(inode);
-
-	return dentry;
 }

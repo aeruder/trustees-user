@@ -60,8 +60,8 @@ struct trustee_command {
 	int command;
 	struct trustee_permission permission;
 	long dev;
-	char *filename;
-	char *devname;
+	char __user *filename;
+	char __user *devname;
 };
 
 #define TRUSTEE_COMMAND_ADD 1

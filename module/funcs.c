@@ -28,6 +28,17 @@
 #include "trustees.h"
 #include "trustees_private.h"
 
+/* This is a hash keyed on devices.  Each device has an array
+ * of filenames associated with that device. (Sorted alphanumerically).
+ */
+DECLARE_RWSEM(trustee_s_hash_sem);
+static struct trustee_s_hash_element *trustee_s_hash = NULL;
+static int trustee_s_hash_size = 0, trustee_s_hash_used = 0,
+   trustee_s_hash_deleted = 0;
+
+/* This is a hash keyed on device/filename.  The hash elements
+ * hold the actual permissions for that device/filename.
+ */
 DECLARE_RWSEM(trustee_hash_sem);
 static struct trustee_hash_element *trustee_hash = NULL;
 static int trustee_hash_size = 0, trustee_hash_used =
@@ -116,18 +127,36 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 	return buffer;
 }
 
-static inline void add_ic_dev(dev_t dev, char *devname)
+static inline void add_ic_dev(dev_t dev, char __user *devname)
 {
 	char *devname2;
 	struct trustee_ic *ic;
+	long dev_len = 0;
 
-	devname2 = kmalloc(strlen(devname) + 1, GFP_KERNEL);
+	if (devname)
+		dev_len = strnlen_user(devname, PATH_MAX);
+
+	if (dev_len > PATH_MAX) {
+		TS_DEBUG_MSG("devname bad, add_ic_dev ignored.\n");
+		return;
+	}
+
+	if (!dev_len) {
+		TS_DEBUG_MSG("No devname specified in add_ic_dev.\n");
+		return;
+	}
+	devname2 = kmalloc(dev_len + 1, GFP_KERNEL);
 	if (!devname2) {
 		TS_DEBUG_MSG
 		    ("Seems that we have ran out of memory adding ic dev!");
 		return;
 	}
-	strcpy(devname2, devname);
+	if (strncpy_from_user(devname2, devname, dev_len) < 0) {
+		TS_DEBUG_MSG
+		  ("Something funky with devname in add_ic_dev");
+		kfree(devname2);
+		return;
+	}
 
 	ic = kmalloc(sizeof(struct trustee_ic), GFP_KERNEL);
 	if (!ic) {
@@ -191,9 +220,7 @@ static inline void free_hash_element(struct trustee_hash_element e)
 }
 
 
-/* hashing functiindent: Standard input:304: Warning:old style assignment ambiguity in "=*".  Assuming "= *"
-
-on researched by Karl Nelson <kenelson @ ece ucdavis edu> 
+/* hashing function researched by Karl Nelson <kenelson @ ece ucdavis edu> 
  * and is used in glib. */
 static inline unsigned int hash_string(const char *s)
 {
@@ -207,17 +234,19 @@ static inline unsigned int hash_string(const char *s)
 	return v;
 }
 
+static inline unsigned int hash_device(const char *name, dev_t device)
+{
+	if (MAJOR(device) == 0) {
+		return hash_string(name);
+	}
+	
+	return new_encode_dev(device);
+}
+
 static inline unsigned int hash(const struct trustee_name *name)
 {
-	unsigned int v = hash_string(name->filename);
-
-	if (TRUSTEE_HASDEVNAME(*name)) {
-		v ^= hash_string(name->devname);
-	} else {
-		v ^= new_encode_dev(name->dev);
-	}
-
-	return v;
+	return hash_string(name->filename) ^ 
+	       hash_device(name->devname, name->dev);
 }
 
 static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1,
@@ -480,7 +509,7 @@ int trustees_funcs_cleanup_globals(void)
 	return 0;
 }
 
-static int prepare_trustee_name(const struct trustee_command __user *command,
+static int prepare_trustee_name(const struct trustee_command *command,
 				struct trustee_name *name)
 {
 	long devl, filel;

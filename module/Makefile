@@ -8,7 +8,7 @@ ifeq ($(uml),)
 KDIR := /lib/modules/`uname -r`/build
 ARCH :=
 else
-KDIR := /home/andy/linux-2.6.8
+KDIR := /home/andy/current-linux
 ARCH := 
 endif
 PWD := $(shell pwd)

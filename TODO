@@ -4,6 +4,7 @@ Todo:
     -- I'm not sure I even want to do this
 - commenting and code cleaning
 - some sort of automated test system
+- check that the correct types are used on the trustee_mask
 
 Done:
 - get rid of memory leak with the trustees hash (10/27/2004)

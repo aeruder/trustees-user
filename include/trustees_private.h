@@ -39,9 +39,19 @@ struct trustee_permission_capsule {
 	struct trustee_permission permission;
 };
 struct trustee_hash_element {
-	int usage;		/* 0 -unused, 1- deleted, 2 - used */
+	int usage;        /* 0 - unused, 1 - deleted, 2 - used */
 	struct trustee_name name;
 	struct trustee_permission_capsule *list;
+};
+
+struct trustee_s_hash_element {
+	int usage;        /* 0 - unused, 1 - deleted, 2 - used */
+	dev_t dev;
+	const char *devname;
+	
+	int max;
+	int used;
+	char **paths;
 };
 
 extern char *trustees_filename_for_dentry(struct dentry *dentry, int *d);
@@ -57,6 +67,9 @@ extern int trustees_process_command(const struct trustee_command __user *
 				    command);
 
 #define TRUSTEE_INITIAL_HASH_SIZE 20
+#define TRUSTEE_INITIAL_S_HASH_SIZE 5
+#define TRUSTEE_INITIAL_S_PATHS_SIZE 10
+
 #define TRUSTEE_INITIAL_NAME_BUFFER 256
 #define TRUSTEE_HASDEVNAME(TNAME) (MAJOR((TNAME).dev)==0)
 
@@ -65,8 +78,6 @@ extern int trustees_process_command(const struct trustee_command __user *
 #else
 #define TS_DEBUG_MSG(...)
 #endif
-
-/*#define TRUSTEES_DEBUG 1*/
 
 /*
  * Magic number!
