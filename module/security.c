@@ -94,6 +94,7 @@ static int trustees_inode_permission(struct inode *inode,
 	is_dir = S_ISDIR(inode->i_mode);
 
 	amask = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir);
+	TS_DEBUG_MSG("trustee_perm returned %d\n", amask);
 	dmask = amask >> TRUSTEE_NUM_ACL_BITS;
 
 	/* no permission if denied */
