@@ -31,12 +31,6 @@ static int __init trustees_init(void)
 
 	return 0;
 }
-	if (register_security (&trustees_security_ops)) {
-		printk (KERN_INFO "Could not register\n");
-		return -EINVAL;
-	}
-	return 0;
-}
 
 static void __exit trustees_exit(void)
 {
@@ -45,10 +39,6 @@ static void __exit trustees_exit(void)
 #ifdef TRUSTEE_DEBUG	
 	printk(KERN_ALERT "Goodbye cruel world!\n");
 #endif
-}
-	if (unregister_security (&trustees_security_ops)) {
-		printk (KERN_ALERT "Failure unregistering...\n");
-	}
 }
 
 security_initcall(trustees_init);
