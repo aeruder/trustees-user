@@ -175,7 +175,9 @@ static inline void free_hash_element_list(struct trustee_hash_element e)
 
 static inline void free_trustee_name(struct trustee_name *name)
 {
-	kfree(name->filename);
+	if (name->filename) {
+		kfree(name->filename);
+	}
 	if (name->devname) {
 		kfree(name->devname);
 	}
@@ -263,7 +265,9 @@ static struct trustee_hash_element *get_trustee_for_name(const struct
 
 }
 
-/* This function does not allocate memory for filename and devname. It should be allocated at calling level */
+/* This function does not allocate memory for filename and devname. 
+ * It should be allocated at calling level 
+ */
 static struct trustee_hash_element *getallocate_trustee_for_name
     (const struct trustee_name *name, int *should_free) {
 	struct trustee_hash_element *r, *n;
@@ -443,36 +447,6 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 
 	return oldmask;
 }
-
-/*
-static int prepare_trustee_name(const struct trustee_command *c,
-				struct trustee_name *name)
-{
-	name->dev = c->dev;
-	name->filename =
-	    kmalloc((strlen(c->filename) + 1) * sizeof(char), GFP_KERNEL);
-	if (!name->filename) {
-		TS_DEBUG_MSG
-		    ("No memory to allocate for temporary name buffer");
-		return 0;
-	}
-	strcpy(name->filename, c->filename);
-
-	name->devname =
-		kmalloc((strlen(c->devname) + 1) * sizeof(char),
-			GFP_KERNEL);
-	if (!name->devname) {
-		TS_DEBUG_MSG
-			("No memory to allocate for temporary device buffer");
-		kfree(name->filename);
-
-		return 0;
-	}
-	strcpy(name->devname, c->devname);
-
-	return 1;
-}
-*/
 
 /* Clear out the hash of trustees and release the hash itself.
  * Also gets rid of the ignore-case list
@@ -666,6 +640,5 @@ int trustees_process_command(const struct trustee_command __user * command)
 	}
       unlk:
 
-	TS_DEBUG_MSG("Returning %d from set trustee func\n", r);
 	return r;
 }
