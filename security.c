@@ -34,6 +34,19 @@ struct security_operations trustees_security_ops = {
 	.inode_permission = trustees_inode_permission
 };
 
+static inline struct nameidata *find_nameidata(struct inode *inode, struct nameidata *nd) {
+	struct namespace *namespace;
+	
+	if (likely(nd)) return nd;
+
+	namespace = current->namespace;
+	get_namespace(namespace);
+
+	if (unlikely(!namespace)) {
+		printk(KERN_ERROR "namespace is NULL!");
+		return NULL;
+	}
+	
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd) {
 
