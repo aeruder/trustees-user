@@ -27,8 +27,8 @@ static int trustees_capable(struct task_struct *tsk, int cap);
 static int trustees_inode_permission(struct inode *inode, 
   int mask, struct nameidata *nd);
 
-static inline int trustees_has_root_perm(struct inode *inode, int mask);
-static inline int trustees_has_unix_perm(struct inode *inode, int mask);
+static inline int has_root_perm(struct inode *inode, int mask);
+static inline int has_unix_perm(struct inode *inode, int mask);
 static inline struct vfsmount *find_inode_mnt(
    struct inode *inode, struct nameidata *nd);
 static inline struct dentry *find_inode_dentry(
@@ -75,14 +75,14 @@ static int trustees_inode_permission(struct inode *inode,
 	int dmask;
 	umode_t mode = inode->i_mode;
 
-	if (trustees_has_root_perm(inode, mask) == 0) return 0;
+	if (has_root_perm(inode, mask) == 0) return 0;
 
-	ret = trustees_has_unix_perm(inode, mask);
+	ret = has_unix_perm(inode, mask);
 	
 	mnt = find_inode_mnt(inode, nd);
 	if (unlikely(!mnt)) {
 		printk(KERN_ERR "Trustees: inode does not have a mnt!\n");
-		return -EACCES;// trustees_has_unix_perm(inode, mask);
+		return -EACCES;// has_unix_perm(inode, mask);
 	}
 		
 	dentry = find_inode_dentry(inode, nd);
@@ -235,7 +235,7 @@ void trustees_deinit_security(void)
 
 /* Checks if user has access to the inode due to root status
  */
-static inline int trustees_has_root_perm(struct inode *inode, int mask) {
+static inline int has_root_perm(struct inode *inode, int mask) {
 	umode_t mode = inode->i_mode;
 
 	if (!(mask & MAY_EXEC) ||
@@ -253,7 +253,7 @@ static inline int trustees_has_root_perm(struct inode *inode, int mask) {
 // to handle capabilities and dealing with ACLs with trustees loaded isn't an
 // issue for me, the function ends up being pretty simple.
 
-static inline int trustees_has_unix_perm(struct inode *inode, int mask) {
+static inline int has_unix_perm(struct inode *inode, int mask) {
 	umode_t mode = inode->i_mode;
 	mask &= ~MAY_APPEND;
 

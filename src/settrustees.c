@@ -20,6 +20,110 @@
 char *trustee_device = NULL;
 char *trustee_config = "/etc/trustee.conf";
 
+struct dev_desc {
+	char *devname;
+	dev_t dev;
+	struct dev_desc *next;
+};
+
+struct dev_desc *ic_list = NULL;
+
+int compare_devs(struct dev_desc *dev1, struct dev_desc *dev2) {
+	if (dev1->dev && dev2->dev) return (dev1 == dev2);
+
+	if (!dev1->dev && !dev2->dev) return (strcmp(dev1->devname, dev2->devname) == 0);
+
+	return 0;
+}
+
+void add_ic_dev(struct dev_desc *dev1) {
+	struct dev_desc *newdev;
+
+	newdev = malloc(sizeof(struct dev_desc));
+	if (!newdev) {
+		printf("Couldn't malloc in add_ic_dev: %s\n", strerror(errno));
+		exit(-1);
+	}
+
+	newdev->devname = strdup(dev1->devname);
+	newdev->dev = dev1->dev;
+	newdev->next = ic_list;
+	ic_list = newdev;
+}
+
+int is_ic_dev(struct dev_desc *dev1) {
+	struct dev_desc *iter;
+
+	for (iter = ic_list; (iter); iter = iter->next) {
+		if (compare_devs(iter, dev1)) return 1;
+	}
+
+	return 0;
+}
+	
+char *extract_to_delimiter(char *s, char end, char **result) {
+	char *res;
+	char *origs = s;
+
+	for (; *s && *s != end; s++);
+
+	res = malloc(s - origs + 1);
+	if (!res) {
+		printf("Problem mallocing mem in extract_between_delimiters: %s\n", 
+		  strerror(errno));
+		exit(-1);
+	}
+	res[s - origs] = '\0';
+
+	strncpy(res, origs, (s - origs));
+
+	if (result) *result = res;
+	
+	printf("%s\n", res);
+	
+	return (*s) ? (s + 1) : NULL;
+}
+
+char *extract_dev(char *s, struct dev_desc *desc) {
+	char *device;
+
+	if (!desc) return NULL;
+
+	desc->next = NULL;
+
+	if (*s == '[') {
+		s = extract_to_delimiter(s + 1, ']', &device);
+		desc->devname = device;
+
+		if (s) {
+			struct stat st;
+
+			if (stat(device, &st)) {
+				printf("Could not find device %s\n", device);
+				return NULL;
+			}
+			if (!S_ISBLK(st.st_mode)) {
+				printf("%s is not a block device, skipped\n", 
+				  device);
+				return NULL;
+			}
+			desc->dev = st.st_rdev;
+		}
+	} else if (*s == '{') {
+		s = extract_to_delimiter(s + 1, '}', &device);
+		desc->devname = device;
+
+		if (s) {
+			desc->dev = 0;
+		}
+	} else {
+		desc->devname = NULL;
+	}
+
+	return s;
+}
+	
+	
 int set_trustee(const struct trustee_command * command)
 {
 	int fd;
@@ -93,15 +197,191 @@ void print_exit(void) {
 	printf("    -t <trustees device file>\n");
 	printf("       Specify the 'trustees' file from the mounted trusteefs fs\n");
 	printf("       This can often be automatically detected: %s\n", trustee_device);
-	printf("    -p <prefix>\n");
-	printf("       prefix to file names\n");
 	printf("\n");
 	exit(-1);
 }
 
+
+void handle_dev_line(char *s, int line) {
+	struct dev_desc dev_desc;
+	struct trustee_command command;
+
+	if (*s != '*') return;
+
+	s = extract_dev(s + 1, &dev_desc);
+	if (!s) {
+		printf("Problem parsing dev_line on line no. %d\n", line);
+		if (dev_desc.devname) free(dev_desc.devname);
+		return;
+	}
+	
+	command.dev = dev_desc.dev;
+	command.devname = dev_desc.devname;
+
+	for (; *s; s++) {
+		command.command = 0;
+
+		switch(*s) {
+			case 'I':
+				add_ic_dev(&dev_desc);
+				command.command = TRUSTEE_COMMAND_MAKE_IC;
+				break;
+			default:
+				printf("Unrecognized device flag '%c' on line %d\n", *s, line);
+		}
+
+		if (command.command) {
+			int r;
+			r = set_trustee(&command);
+			if (r) {
+				printf("Can't set trustee for %s, reason: %s\n",
+				  command.filename, strerror(r));
+				exit(-1);
+			}
+		}
+	}
+
+	return;
+}
+		
+void handle_reg_line(char *s, int line) {
+	int r, isgroup;
+	struct trustee_command command;
+	char *maskstr, *uidstr, *path;
+	int icdev = 0;
+	struct dev_desc dev_desc;
+	char *iter;
+  
+/* Grab the device */
+	s = extract_dev(s, &dev_desc);
+
+	if (!s) {
+		printf("Problem parsing device on line no. %d\n", line);
+		if (dev_desc.devname) free(dev_desc.devname);
+		return;
+	}
+
+	command.devname = dev_desc.devname;
+	command.dev = dev_desc.dev;
+	icdev = is_ic_dev(&dev_desc);
+
+/* Grab the path */
+	s = extract_to_delimiter(s, ':', &path);
+
+	if (!s) {
+		printf("Problem parsing path on line no. %d\n", line);
+		free(dev_desc.devname);
+		free(path);
+		return;
+	}
+
+	if (icdev) {
+		char *t;
+		for (t = path; *t; t++) {
+			if ((*t >= 'A') && (*t <= 'Z')) (*t) += 'a' - 'A';
+		}
+	}
+
+	command.filename = path;
+
+	while(s && *s) { 
+		command.permission.mask = 0;
+		command.permission.u.uid = command.permission.u.gid = 0;
+		command.command = TRUSTEE_COMMAND_ADD;
+
+		uidstr = maskstr = NULL;
+
+		s = extract_to_delimiter(s, ':', &uidstr);
+		if (s) s = extract_to_delimiter(s, ':', &maskstr);
+
+		if (!s && !maskstr) {
+			printf("Problems parsing name/mask pair on line %d\n", line);
+			free(command.filename);
+			free(command.devname);
+			if (uidstr) free(uidstr);
+			return;
+		}
+
+		isgroup = 0;
+		if (uidstr[0] == '+') {
+			isgroup = 1;
+			memmove(uidstr, uidstr + 1, strlen(uidstr));
+		}
+
+		if (isgroup) {
+			struct group *grp = getgrnam(uidstr);
+			if (!grp) {
+				printf("Invalid group %s on line %d\n", uidstr, line);
+				continue;
+			}
+			command.permission.u.gid = grp->gr_gid;
+			command.permission.mask |= TRUSTEE_IS_GROUP_MASK; 
+		} else {
+			struct passwd *pwd;
+			if (uidstr[0] == '*') {
+				command.permission.mask += TRUSTEE_ALL_MASK;
+			} else {
+				pwd = getpwnam(uidstr);
+				if (!pwd) {
+					printf("Invalid uid %s on line %d, continuing...\n", uidstr, line);
+					continue;
+				}
+				command.permission.u.uid = pwd->pw_uid;
+			}
+		}
+
+		for (iter = maskstr; *iter; iter++) {
+			switch(*iter) {
+				case 'D' :
+					command.permission.mask |= TRUSTEE_ALLOW_DENY_MASK;
+					break;
+				case 'C' :
+					command.permission.mask |= TRUSTEE_CLEAR_SET_MASK;
+					break;
+				case 'R':
+					command.permission.mask |= TRUSTEE_READ_MASK;
+					break;
+				case 'W':
+					command.permission.mask |= TRUSTEE_WRITE_MASK;
+					break;
+				case 'B':
+					command.permission.mask |= TRUSTEE_BROWSE_MASK;
+					break;
+				case 'E':
+					command.permission.mask |= TRUSTEE_READ_DIR_MASK;
+					break;
+				case 'U':
+					command.permission.mask |= TRUSTEE_USE_UNIX_MASK;
+					break;
+				case 'X':
+					command.permission.mask |= TRUSTEE_EXECUTE_MASK;
+					break;
+				case '!':
+					command.permission.mask |= TRUSTEE_NOT_MASK;
+					break;
+				case 'O':
+					command.permission.mask |= TRUSTEE_ONE_LEVEL_MASK;
+					break;
+				default:
+					printf("Ilegal mask '%c' on line %d\n", *iter, line);
+			}
+		}
+		r = set_trustee(&command);
+		if (r) {
+			printf("Can't set trustee for %s, reason: %s\n",
+			  command.filename, strerror(r));
+			exit(-1);
+		}
+		free(maskstr);
+		free(uidstr);
+	}
+
+	free(command.filename);
+	free(command.devname);
+}
+
 int main(int argc, char * argv[])
 {
-	char *prefix = "";
 	int i, j, r;
 	int flush = 0, exitafterflush = 0;
 	FILE *f;
@@ -109,11 +389,7 @@ int main(int argc, char * argv[])
 	char  devname[PATH_MAX+NAME_MAX];
 	struct trustee_command command;
 	char s[32000];
-	char *olds, *n;
-	struct group *g;
-	struct passwd *pw; 
-	struct stat st;
-	int line;
+	int line, pass;
   
 	command.filename = name;
 	command.devname = devname;
@@ -123,7 +399,7 @@ int main(int argc, char * argv[])
 		char *new;
 		new = realloc(trustee_device, strlen(trustee_device) + 100);
 		if (!new) {
-			fprintf(stderr, "It seems we ran out of memory... bailing...\n");
+			printf("It seems we ran out of memory... bailing...\n");
 			exit(-1);
 		}
 		trustee_device = new;
@@ -148,17 +424,14 @@ int main(int argc, char * argv[])
 		case 't':
 			trustee_device = strdup(optarg);
 			break;
-		case 'p':
-			prefix = strdup(optarg);
-			break;
 		}
 	}
 
 	if (!trustee_device) {
-		fprintf(stderr, "Couldn't determine where the trusteesfs was mounted.  You need to\n");
-		fprintf(stderr, "do something like 'mount -t trusteesfs none /place/to/mount' and\n");
-		fprintf(stderr, "run again.  It is possible the mount point could just not be determined\n");
-		fprintf(stderr, "in which case you should specify it with the -t option.\n");
+		printf("Couldn't determine where the trusteesfs was mounted.  You need to\n");
+		printf("do something like 'mount -t trusteesfs none /place/to/mount' and\n");
+		printf("run again.  It is possible the mount point could just not be determined\n");
+		printf("in which case you should specify it with the -t option.\n");
 		exit (-1);
 	}
 		
@@ -166,9 +439,9 @@ int main(int argc, char * argv[])
 	f = fopen(trustee_device, "w");
 	if (f == NULL)
 	{
-		fprintf(stderr, "Could not open the trustees device for opening: %s\n", 
+		printf("Could not open the trustees device for opening: %s\n", 
 		  trustee_device);
-		fprintf(stderr, "The error was %s\n", strerror(errno));
+		printf("The error was %s\n", strerror(errno));
 		exit (-1);
 	}
 
@@ -178,7 +451,7 @@ int main(int argc, char * argv[])
 		} else {
 			f = fopen(trustee_config, "r");
 			if (!f) {
-				fprintf(stderr, "Could not read config file %s, reason %s\n", 
+				printf("Could not read config file %s, reason %s\n", 
 				  trustee_config, strerror(errno));
 				exit(-1);
 			}
@@ -189,7 +462,7 @@ int main(int argc, char * argv[])
 		command.command = TRUSTEE_COMMAND_REMOVE_ALL;
 		r = set_trustee(&command);
 		if (r) {
-			fprintf(stderr, "Can't set trustee for %s, reason: %s\n",
+			printf("Can't set trustee for %s, reason: %s\n",
 			  command.filename, strerror(r));
 			exit(-1);
 		}
@@ -197,154 +470,43 @@ int main(int argc, char * argv[])
 
 	if (exitafterflush) exit(0);
 
-	i = strlen(prefix);
-	
-	if ((i > 0) && (prefix[i - 1] == '/')) 
-		prefix[i - 1] = 0;
-	
 	
 	s[31999] = '\0';
 	line = 0;
-	while (fgets(s, 31999, f) != NULL) {
-		line++;
-		i = strlen(s);
-		if (i == 31999) { /* handle lines longer than 31999 characters */
-			fprintf(stderr, "Warning skipping line longer than 31999 characters!\n");
-			while (((j = fgetc(f)) != '\n') && (j != EOF));
-			continue;
-		}
-		if (i == 0) continue;
-		if (s[0] == '#') continue;
-		if (s[i - 1] == '\n') s[i - 1] = 0;
-		if (strlen(s) == 0) continue;
-/*handle block device */;
-		if (*s == '[') {
-			for (olds = s + 1; (*olds != ']') && *olds; olds++);
-			if (!*olds) {
-				fprintf(stderr, "] expected on line %d\n", line);
+	pass = 0;
+	while (pass < 3) { 
+		while (fgets(s, 31999, f) != NULL) {
+			line++;
+			i = strlen(s);
+			if (i == 31999) { /* handle lines longer than 31999 characters */
+				printf("Warning skipping line longer than 31999 characters!\n");
+				while (((j = fgetc(f)) != '\n') && (j != EOF));
 				continue;
 			}
-			*olds = 0;
-			if (stat(s + 1, &st)) {
-				fprintf(stderr, "Can not find device %s\n", s + 1);
+			if (i == 0) continue;
+			if (s[0] == '#') continue;
+			if (s[i - 1] == '\n') s[i - 1] = 0;
+			if (strlen(s) == 0) continue;
+			if (s[0] == '*') {
+				if (pass == 1)
+					handle_dev_line(s, line);
 				continue;
 			}
-			if (!S_ISBLK(st.st_mode)) {
-				fprintf(stderr, "%s is not a block device, skipped\n", 
-				  s + 1);
+			if ((s[0] == '{') || (s[0] == '[')) {
+				if (pass == 2)
+					handle_reg_line(s, line);
 				continue;
 			}
-			command.dev=st.st_rdev;
-/*handle network device */;
-		} else if (*s == '{') {
-			for (olds = s + 1; (*olds != '}') && *olds; olds++);
-			if (!*olds) {
-				fprintf(stderr, "} expected on line %d\n", line);
-				continue;
-			}
-			*olds = 0;
-			command.dev = 0;
-			strcpy(command.devname, s+1);
-		} else {
-			fprintf(stderr, "Can not recognize line %s (line %d)\n", s, line);
-			continue;
-		}
-		olds++;
 
-/* pull in the filename */
-		if ((n = strsep(&olds,":"))==NULL) {
-			fprintf(stderr, "Can not extract file name from line %d\n", line);
-			continue;
-		}
-
-		strcpy(name, prefix);
-		strcat(name, n); 
-		i = strlen(name);
-		if ((i > 1) && (name[i-1] == '/')) 
-			name[i-1]=0;
-		while (((n = strsep(&olds, ":")) != NULL)) {
-			command.permission.mask=0;
-			if (n[0] == 0) {
-				fprintf(stderr, "Can not extract user name from line %d\n", line);
-				break;
-			}
-			if (n[0] == '+') {
-				command.permission.mask |= TRUSTEE_IS_GROUP_MASK;
-				n++;
-			}
-			if (n[0] == 0) {
-				fprintf(stderr, "Can not extract user name from line %d\n", line);
-				strsep(&olds,":");
-				break;
-			}
-			if (command.permission.mask & TRUSTEE_IS_GROUP_MASK) {
-				if ((g = getgrnam(n)) == NULL) {
-					fprintf(stderr, "Invalid group %s on line %d\n", n, line);
-					strsep(&olds, ":");
-					break;
-				}
-				command.permission.u.gid=g->gr_gid;
-			} else {
-				if (n[0] == '*') 
-					command.permission.mask |= TRUSTEE_ALL_MASK;
-				else if ((pw = getpwnam(n)) == NULL) {
-					fprintf(stderr, "Invalid user %s on line %d\n", n, line);
-					strsep(&olds, ":");		
-					break;
-				} else {
-					command.permission.u.uid = pw->pw_uid;
-				}
-			}
-
-			if ((n = strsep(&olds, ":")) == NULL) {
-				fprintf(stderr, "Can not extract mask from line %d\n", line);
-				break;
-			}
-
-			for (; *n; n++) {
-				switch(*n) {
-					case 'D' :
-						command.permission.mask |= TRUSTEE_ALLOW_DENY_MASK;
-						break;
-					case 'C' :
-						command.permission.mask |= TRUSTEE_CLEAR_SET_MASK;
-						break;
-					case 'R':
-						command.permission.mask |= TRUSTEE_READ_MASK;
-						break;
-					case 'W':
-						command.permission.mask |= TRUSTEE_WRITE_MASK;
-						break;
-					case 'B':
-						command.permission.mask |= TRUSTEE_BROWSE_MASK;
-						break;
-					case 'E':
-						command.permission.mask |= TRUSTEE_READ_DIR_MASK;
-						break;
-					case 'U':
-						command.permission.mask |= TRUSTEE_USE_UNIX_MASK;
-						break;
-					case 'X':
-						command.permission.mask |= TRUSTEE_EXECUTE_MASK;
-						break;
-					case '!':
-						command.permission.mask |= TRUSTEE_NOT_MASK;
-						break;
-					case 'O':
-						command.permission.mask |= TRUSTEE_ONE_LEVEL_MASK;
-						break;
-					default:
-						fprintf(stderr, "Ilegal mask '%c' on line %d\n", *n, line);
-				}
-			}
-			command.command = TRUSTEE_COMMAND_ADD;
-			r = set_trustee(&command);
-			if (r) {
-				fprintf(stderr, "Can't set trustee for %s, reason: %s\n",
-				  command.filename, strerror(r));
+			if (pass == 0) {
+				printf("Garbled input on line %d\n", line);
+				exit(-1);
 			}
 		}
+		rewind(f);
+		pass++;
 	}
+
 	fclose(f);
 		
 	return 0; 

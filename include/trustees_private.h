@@ -20,27 +20,32 @@
 #include <linux/kdev_t.h>
 #include "trustees.h"
 
-/* this function evaluates the trustee mask applicable to given name for given user. it is does not checks the trustees for parent and higher levels 
+#define TRUSTEE_DEFAULT_MASK TRUSTEE_USE_UNIX_MASK
 
-result & TRUSTEES_ACL_MASK - allow mask
-(result >> TRUSTEES_NUM_ACL_BITS) & TRUSTEES_ACL_MASK - deny mask
-old_mask - the same mask for higher level
-*/
-#define TRUSTEES_DEFAULT_MASK TRUSTEES_USE_UNIX_MASK
-
+struct trustee_ic {
+	dev_t dev;
+	char * devname; /* ONLY if MAJOR(dev)==0 */
+	struct trustee_ic *next;
+};
 
 struct trustee_name {
-  dev_t dev;
-  char * filename;
-  char * devname; /* ONLY if MAJOR(dev)==0 */
+	dev_t dev;
+	char * filename;
+	char * devname; /* ONLY if MAJOR(dev)==0 */
+};
+
+struct trustee_permission_capsule {
+	struct pemission_capsule * next;
+	struct trustee_permission permission;
+};
+struct trustee_hash_element {
+	int usage; /* 0 -unused, 1- deleted, 2 - used */
+	struct trustee_name  name;
+	struct trustee_permission_capsule * list;
 };
 
 extern char *
   trustees_filename_for_dentry(struct dentry *dentry, int *d);
-
-extern int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int height);
-
-extern int get_trustee_mask_for_dentry(struct dentry * dentry, uid_t user, struct nameidata *nd);
 
 extern void trustees_clear_all(void);
 
@@ -48,14 +53,11 @@ extern int trustee_perm(
   struct dentry *dentry, struct vfsmount *mnt,
   char *file_name, int unix_ret, int depth, int is_dir);
 
-#define TRUSTEES_INITIAL_HASH_SIZE 20 
-#define TRUSTEES_INITIAL_NAME_BUFFER 256
-#define TRUSTEES_HASDEVNAME(TNAME) (MAJOR((TNAME).dev)==0)
-
-
-/* name & permission are ignored if command=TRUSTEES_COMMAND_REMOVE_ALL */ 
-/*  permission is ignored if command=TRUSTEES_COMMAND_REMOVE */ 
 extern int trustees_process_command(const struct trustee_command * command);
+
+#define TRUSTEE_INITIAL_HASH_SIZE 20 
+#define TRUSTEE_INITIAL_NAME_BUFFER 256
+#define TRUSTEE_HASDEVNAME(TNAME) (MAJOR((TNAME).dev)==0)
 
 #ifdef TRUSTEES_DEBUG
 #define TS_DEBUG_MSG(...) printk(KERN_ERR "Trustees: " __VA_ARGS__)

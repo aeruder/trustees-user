@@ -28,21 +28,12 @@
 #include "trustees.h"
 #include "trustees_private.h"
 
-DECLARE_RWSEM(trustees_hash_sem);
-
-struct permission_capsule {
-	struct pemission_capsule * next;
-	struct trustee_permission permission;
-};
-struct trustee_hash_element {
-	int usage; /* 0 -unused, 1- deleted, 2 - used */
-	struct trustee_name  name;
-	struct permission_capsule * list;
-};
-
+DECLARE_RWSEM(trustee_hash_sem);
 static struct trustee_hash_element *trustee_hash = NULL;
 static int trustee_hash_size = 0, trustee_hash_used = 0, trustee_hash_deleted = 0;
 
+DECLARE_RWSEM(trustee_ic_sem);
+static struct trustee_ic *trustee_ic_list = NULL;
 
 #define FN_CHUNK_SIZE 50
 
@@ -120,9 +111,49 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 	return buffer;
 }
 
+static inline void add_ic_dev(dev_t dev, char *devname) {
+	char *devname2;
+	struct trustee_ic *ic;
+
+	devname2 = kmalloc(strlen(devname) + 1, GFP_KERNEL);
+	if (!devname2) {
+		TS_DEBUG_MSG("Seems that we have ran out of memory adding ic dev!");
+		return;
+	}
+	strcpy(devname2, devname);
+
+	ic = kmalloc(sizeof(struct trustee_ic), GFP_KERNEL);
+	if (!ic) {
+		TS_DEBUG_MSG("Seems that we ran out of memory allocating ic!");
+		return;
+	}
+
+	ic->dev = dev;
+	ic->devname = devname2;
+
+	down_write(&trustee_ic_sem);
+	ic->next = trustee_ic_list;
+	trustee_ic_list = ic->next;
+	up_write(&trustee_ic_sem);
+}
+
+static inline void remove_ic_devs(void) {
+	struct trustee_ic *ic, *iter, *next;;
+	
+	down_write(&trustee_ic_sem);
+	ic = trustee_ic_list;
+	trustee_ic_list = NULL;
+	up_write(&trustee_ic_sem);
+
+	for (iter = ic; (iter); iter = next) {
+		next = iter->next;
+		kfree(iter->devname);
+		kfree(iter);
+	}
+}
 
 static inline void free_hash_element_list(struct trustee_hash_element e) {
-	struct permission_capsule *l1, *l2;
+	struct trustee_permission_capsule *l1, *l2;
 	l1 = e.list;
 	while (l1 != NULL) {
 		l2 = l1;
@@ -134,7 +165,7 @@ static inline void free_hash_element_list(struct trustee_hash_element e) {
 
 static inline void free_trustee_name(struct trustee_name *name) {
 	kfree(name->filename);
-	if (TRUSTEES_HASDEVNAME(*name)) {
+	if (TRUSTEE_HASDEVNAME(*name)) {
 		kfree(name->devname);
 	}
 } 
@@ -162,7 +193,7 @@ static inline unsigned int hash_string(const char *s) {
 static inline unsigned int hash(const struct trustee_name *name) {
 	unsigned int v = hash_string(name->filename);
 	
-	if (TRUSTEES_HASDEVNAME(*name)) {
+	if (TRUSTEE_HASDEVNAME(*name)) {
 		v ^= hash_string(name->devname);
 	} else {
 		v ^= new_encode_dev(name->dev);
@@ -171,14 +202,17 @@ static inline unsigned int hash(const struct trustee_name *name) {
 	return v;
 } 
 
+static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1, char *devname2) {
+	if ((MAJOR(dev1) == 0) && (MAJOR(dev2) == 0))
+		return (strcmp(devname1, devname2) == 0);
+	else if ((MAJOR(dev1) != 0) && (MAJOR(dev2) != 0))
+		return (dev1 == dev2);
+	return 0;
+}
 static inline int trustee_name_cmp(const struct trustee_name *n1, 
                                    const struct trustee_name *n2) {
-	if (TRUSTEES_HASDEVNAME(*n1) && TRUSTEES_HASDEVNAME(*n2)) 
-		return ((strcmp(n1->devname, n2->devname) == 0) && 
-		       (strcmp(n1->filename, n2->filename) == 0));
-	else if ((!TRUSTEES_HASDEVNAME(*n1)) && (!TRUSTEES_HASDEVNAME(*n2))) 
-		return (((n1->dev) == (n2->dev)) && 
-		       (strcmp(n1->filename, n2->filename) == 0));
+	if (trustee_dev_cmp(n1->dev, n2->dev, n1->devname, n2->devname))
+		return (strcmp(n1->filename, n2->filename) == 0);
 	return 0;
 }
 
@@ -189,19 +223,19 @@ static struct trustee_hash_element *get_trustee_for_name(
 
 	if (trustee_hash == NULL) return NULL;
 
-	down_read(&trustees_hash_sem);
+	down_read(&trustee_hash_sem);
 
 	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size) {
 		if (trustee_hash[i].usage == 1) continue;
 		if (trustee_name_cmp(&trustee_hash[i].name, name)) {
-			up_read(&trustees_hash_sem);
+			up_read(&trustee_hash_sem);
 //			TS_DEBUG_MSG("Found a trustee element for %s\n",
 //			  name->filename);
 			return trustee_hash + i;
 		}
 	}
 
-	up_read(&trustees_hash_sem);
+	up_read(&trustee_hash_sem);
 
 	return NULL;
 
@@ -220,23 +254,23 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	if (trustee_hash==NULL){
 		TS_DEBUG_MSG("Building new trustee hash\n");
 
-		down_write(&trustees_hash_sem);
-		trustee_hash=kmalloc(sizeof(struct trustee_hash_element)*TRUSTEES_INITIAL_HASH_SIZE, GFP_KERNEL);
+		down_write(&trustee_hash_sem);
+		trustee_hash=kmalloc(sizeof(struct trustee_hash_element)*TRUSTEE_INITIAL_HASH_SIZE, GFP_KERNEL);
 		if (trustee_hash==NULL) {
 
 			TS_DEBUG_MSG("Can not allocate memory for trustee hash\n");
 
-			up_write(&trustees_hash_sem);
+			up_write(&trustee_hash_sem);
 			return r;
 		}
-		trustee_hash_size=TRUSTEES_INITIAL_HASH_SIZE;
+		trustee_hash_size=TRUSTEE_INITIAL_HASH_SIZE;
 		trustee_hash_used=0;
 		trustee_hash_deleted=0;
 		for (i=0;i<trustee_hash_size;i++) trustee_hash[i].usage=0;
-		up_write(&trustees_hash_sem);
+		up_write(&trustee_hash_sem);
 	}
 	else if ((trustee_hash_size*3/4<trustee_hash_used) || (trustee_hash_size-2<trustee_hash_used)) { /*hash needed to be rebuilt, rebuilding hash */
-		down_write(&trustees_hash_sem);
+		down_write(&trustee_hash_sem);
 		newsize=(trustee_hash_deleted*3)>trustee_hash_size?trustee_hash_size:trustee_hash_size*2;
 
 		TS_DEBUG_MSG("Rebuilding trustee hash, oldsize: %d, newsize %d, deleted %d\n",trustee_hash_size,newsize, trustee_hash_deleted);
@@ -246,7 +280,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 
 			TS_DEBUG_MSG("Can not allocate memory for trustee hash\n");
 
-			up_write(&trustees_hash_sem);
+			up_write(&trustee_hash_sem);
 			return r;
 		}
 		for (i=0;i<newsize;i++) n[i].usage=0;
@@ -262,9 +296,9 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash=n;
 		trustee_hash_size=newsize;
 		trustee_hash_deleted=0;
-		up_write(&trustees_hash_sem);
+		up_write(&trustee_hash_sem);
 	}
-	down_read(&trustees_hash_sem);
+	down_read(&trustee_hash_sem);
 
 	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size);
 	trustee_hash[j].name=*name;
@@ -276,15 +310,15 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	TS_DEBUG_MSG("Added element to trustee hash: j %d, name : %s\n",j,r->name.filename);
 
 	trustee_hash_used++;
-	up_read(&trustees_hash_sem);
+	up_read(&trustee_hash_sem);
 	
 	return r;
 }
 
-int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int height) {
+static int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int height) {
 	struct trustee_hash_element *e;
 	int m;
-	struct permission_capsule *l;
+	struct trustee_permission_capsule *l;
 	int appl;
 	e = get_trustee_for_name(name);
 	if (!e) {
@@ -313,6 +347,13 @@ int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int height
 	return oldmask;
 }
 
+static inline void str_to_lower(char *string) {
+	for (; *string; string++) {
+		if ((*string >= 'A') && (*string <= 'Z')) (*string) += 'a' - 'A';
+	}
+}
+	
+
 int trustee_perm(
   struct dentry *dentry, struct vfsmount *mnt,
   char *file_name, int unix_ret, int depth, int is_dir) {
@@ -321,10 +362,20 @@ int trustee_perm(
 	char *filecount;
 	char c;
 	struct trustee_name trustee_name;
+	struct trustee_ic *iter;
 
 	trustee_name.dev = mnt->mnt_sb->s_dev;
 	trustee_name.devname = mnt->mnt_devname;
 	trustee_name.filename = file_name;
+
+	down_read(&trustee_ic_sem);
+	for (iter = trustee_ic_list; (iter); iter=iter->next) {
+		if (trustee_dev_cmp(iter->dev, trustee_name.dev, iter->devname, trustee_name.devname)) {
+			str_to_lower(file_name);
+			break;
+		}
+	}
+	up_read(&trustee_ic_sem);
 
 	filecount = file_name + 1;
 	for (;;) {
@@ -350,7 +401,7 @@ static int prepare_trustee_name(const struct trustee_command * c, struct trustee
 		}
 	 copy_from_user(name->filename,c->filename,(strlen(c->filename)+1)*sizeof(char));
 		
-	 if (TRUSTEES_HASDEVNAME(*name)) {
+	 if (TRUSTEE_HASDEVNAME(*name)) {
 		 name->devname=kmalloc((strlen(c->devname)+1)*sizeof(char),GFP_KERNEL);
 		 if (!name->devname) {
 			TS_DEBUG_MSG("No memory to allocate for temporary device buffer");
@@ -369,21 +420,21 @@ void trustees_clear_all(void) {
 	int i;
 	if (!trustee_hash) 
 		return;
-	down_write(&trustees_hash_sem);
+	down_write(&trustee_hash_sem);
 	for (i = 0; i < trustee_hash_size; i++) {
 		if (trustee_hash[i].usage == 2) 
 			free_hash_element(trustee_hash[i]);
 	}
 	kfree(trustee_hash);
 	trustee_hash = NULL;
-	up_write(&trustees_hash_sem);
+	up_write(&trustee_hash_sem);
 }
 
 int trustees_process_command(const struct trustee_command * command) {
-	int r=-ENOSYS;
+	int r = -ENOSYS;
 	struct trustee_name name;
-	struct trustee_hash_element * e;
-	struct permission_capsule * capsule;
+	struct trustee_hash_element *e;
+	struct trustee_permission_capsule *capsule;
 	int should_free;
 	struct trustee_command c;
 	copy_from_user(&c,command,sizeof(c));
@@ -393,8 +444,12 @@ int trustees_process_command(const struct trustee_command * command) {
 
 	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;
 	switch (c.command) {
+	case TRUSTEE_COMMAND_MAKE_IC :
+		r = 0;
+		add_ic_dev(c.dev, c.devname);
+		goto unlk;
 	case TRUSTEE_COMMAND_REMOVE_ALL :
-		r=0;
+		r = 0;
 		trustees_clear_all();
 		goto unlk;
 	case TRUSTEE_COMMAND_REMOVE:
@@ -426,10 +481,10 @@ int trustees_process_command(const struct trustee_command * command) {
 			goto unlk;
 		}
 		free_hash_element_list(*e);
-		capsule=kmalloc(sizeof(struct permission_capsule),GFP_KERNEL);
+		capsule=kmalloc(sizeof(struct trustee_permission_capsule),GFP_KERNEL);
 		capsule->permission=c.permission;
 		capsule->next=(void*)e->list;
-		e->list=capsule;
+		e->list = capsule;
 		r=0;
 		if (should_free) free_trustee_name(&name);
 		     
@@ -447,7 +502,7 @@ int trustees_process_command(const struct trustee_command * command) {
 			goto unlk;
 		}
 		
-		capsule=kmalloc(sizeof(struct permission_capsule),GFP_KERNEL);
+		capsule=kmalloc(sizeof(struct trustee_permission_capsule),GFP_KERNEL);
 		capsule->permission=c.permission;
 		capsule->next=(void*)e->list;
 		e->list=capsule;

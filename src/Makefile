@@ -1,4 +1,4 @@
-CFLAGS += -I$(PWD)/../include -Wall
+CFLAGS += -ggdb -I$(PWD)/../include -Wall
 LDFLAGS := 
 CC := gcc
 settrustees_objs := settrustees.o

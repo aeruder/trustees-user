@@ -48,9 +48,6 @@
 #define trustee_acl __u16
 #define trustee_default_acl TRUSTEE_USE_UNIX_MASK 
 
-
-
-
 struct trustee_permission {
   	trustee_acl mask;
 	union {
@@ -59,23 +56,19 @@ struct trustee_permission {
 	}  u;
 };
 
-
-
 struct trustee_command {
   int command;
   struct trustee_permission  permission;
-  int dev;
+  long dev;
   char * filename;
   char * devname;
 };
-
-
-
 
 #define TRUSTEE_COMMAND_ADD 1
 #define TRUSTEE_COMMAND_REPLACE 2
 #define TRUSTEE_COMMAND_REMOVE_ALL 3
 #define TRUSTEE_COMMAND_REMOVE 4
+#define TRUSTEE_COMMAND_MAKE_IC 5
 
 #endif
 
