@@ -19,6 +19,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/smp_lock.h>
+#include <linux/namespace.h>
 
 #include "trustees_private.h"
 
@@ -43,9 +44,10 @@ static inline struct nameidata *find_nameidata(struct inode *inode, struct namei
 	get_namespace(namespace);
 
 	if (unlikely(!namespace)) {
-		printk(KERN_ERROR "namespace is NULL!");
+		printk(KERN_ERR "namespace is NULL!");
 		return NULL;
 	}
+}
 	
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd) {
