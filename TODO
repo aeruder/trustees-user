@@ -4,6 +4,9 @@ Todo:
   and at handling secondary security modules
 - commenting and code cleaning
 - test out network shares
+- majorly cleanup the settrustees code
+   especially wrt the lack of newlines everywhere
+
 
 Done:
 - get rid of memory leak with the trustees hash (10/27/2004)
