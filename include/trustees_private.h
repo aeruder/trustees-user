@@ -41,9 +41,13 @@ struct trustee_name {
 extern char *
   trustees_filename_for_dentry(struct dentry *dentry, int *d);
 
-extern int  get_trustee_mask_for_name(const struct trustee_name * name,uid_t user,int oldmask,int height); 
+extern int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int height);
 
 extern int get_trustee_mask_for_dentry(struct dentry * dentry, uid_t user, struct nameidata *nd);
+
+extern int trustee_perm(
+  struct dentry *dentry, struct vfsmount *mnt,
+  char *file_name, int unix_ret, int depth, int is_dir);
 
 #define TRUSTEES_INITIAL_HASH_SIZE 4
 #define TRUSTEES_INITIAL_NAME_BUFFER 256

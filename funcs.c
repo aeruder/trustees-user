@@ -15,6 +15,7 @@
  */
 
 #include <linux/fs.h>
+#include <linux/mount.h>
 #include <linux/dcache.h>
 #include <linux/string.h>
 #include <linux/mm.h>
@@ -119,7 +120,6 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 		buffer[j] = buffer[i - j - 1];
 		buffer[i - j - 1] = c;
 	}
-	if (i > 1) buffer[i - 1] = 0;
 
 	if (d) *d = depth;
 	
@@ -285,135 +285,66 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	return r;
 }
 
-int  get_trustee_mask_for_name( const struct trustee_name * name,uid_t user,int oldmask,int height)
-{
-	struct trustee_hash_element * e;
+int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int height) {
+	struct trustee_hash_element *e;
 	int m;
-	struct permission_capsule * l;
+	struct permission_capsule *l;
 	int appl;
-#ifdef TRUSTEES_DEBUG
-	printk("getting trustee mask for %s ", name->filename);
-#endif
-	e=get_trustee_for_name(name);
-	if (e==NULL) {
-#ifdef TRUSTEES_DEBUG
-		printk("Not found, returning old trustee, %x\n",oldmask);
-#endif
+	e = get_trustee_for_name(name);
+	if (!e) {
 		return oldmask;
 	}
-	for (l=e->list;l!=NULL;l=(void*) l->next) {
-		if ((height<0) && (l->permission.mask & TRUSTEE_ONE_LEVEL_MASK)) continue;
+	for (l = e->list; l != NULL; l = (void*)l->next) {
+		if ((height < 0) && (l->permission.mask & TRUSTEE_ONE_LEVEL_MASK)) 
+			continue;
 		appl=((!(l->permission.mask & TRUSTEE_IS_GROUP_MASK)) && (current->fsuid==l->permission.u.uid)) 
 		    ||
 		    (((l->permission.mask & TRUSTEE_IS_GROUP_MASK)) && (in_group_p(l->permission.u.gid)))
 		    ||
 		    (l->permission.mask & TRUSTEE_ALL_MASK);
-		if (l->permission.mask & TRUSTEE_NOT_MASK) appl=!appl;
-		if (!appl) continue;
-		m=l->permission.mask & TRUSTEE_ACL_MASK;
-#ifdef TRUSTEES_DEBUG
-		printk("Found a suitable trustee, mask %x",l->permission.mask);
-#endif
+		if (l->permission.mask & TRUSTEE_NOT_MASK) appl = !appl;
+
+		if (!appl) 
+			continue;
+
+		m = l->permission.mask & TRUSTEE_ACL_MASK;
+
 		if (l->permission.mask & TRUSTEE_ALLOW_DENY_MASK) m <<= TRUSTEE_NUM_ACL_BITS;
-		oldmask=l->permission.mask & TRUSTEE_CLEAR_SET_MASK? oldmask & (~m):oldmask | m;
 
+		oldmask = l->permission.mask & TRUSTEE_CLEAR_SET_MASK ? (oldmask & (~m)) : (oldmask | m);
 	}
-#ifdef TRUSTEES_DEBUG
-	printk("The new trustee mask is %x\n",oldmask);
-#endif
+
 	return oldmask;
-	
 }
 
-int get_trustee_mask_for_dentry(struct dentry *dentry, uid_t user, struct nameidata *nd) {
-  int oldmask=trustee_default_acl;
-  char * namebuffer, * buf2;
-  int i,j,k;
-  char c;
-  int   bufsize;
-  int   slashes=1;
-  int   slash=1;
-  struct trustee_name name;
-  int isdir=S_ISDIR(dentry->d_inode->i_mode);
-#ifdef  TRUSTEES_DEBUG
-  if (user!= TRUSTEES_DEBUG_USER) return trustee_default_acl;
-#endif
-  /* debug */ if (dentry->d_parent==NULL) {
-#ifdef TRUSTEES_DEBUG
-    printk("d_parent  is null");
-#endif
-    return trustee_default_acl;
-  }
-  /* debug */ if (dentry->d_name.name==NULL) {
-#ifdef TRUSTEES_DEBUG
-    printk("name is null");
-#endif
-    return trustee_default_acl;
-  }
-  namebuffer=kmalloc(TRUSTEES_INITIAL_NAME_BUFFER,GFP_KERNEL);
-  if (!namebuffer) return trustee_default_acl;
-  bufsize=TRUSTEES_INITIAL_NAME_BUFFER;
-  *namebuffer='/';
-  namebuffer[1]=0;
-  i=1;
-  for (;;) {
-    if (IS_ROOT(dentry)) break;
-    j=i+strlen(dentry->d_name.name);
-    if (j+1>=bufsize) { /*reallocating the buffer*/
-      while  (j+1>=bufsize) bufsize*=2;
-      buf2=kmalloc(bufsize,GFP_KERNEL);
-      if (!buf2) {
-	kfree(namebuffer);
-	return trustee_default_acl;
-      }
-      strcpy(buf2,namebuffer);
-      kfree(namebuffer);
-	    namebuffer=buf2;
-	
-    }
-    for (k=0;dentry->d_name.name[k];k++) 
-      namebuffer[j-1-k]=dentry->d_name.name[k];
-    i=j;
-    namebuffer[i++]='/';
-    slashes++;
-    dentry=dentry->d_parent;
-  }
-  namebuffer[i]=0;
-  //
-  // The path is found, reversing the buffer
-  //
-  for (j=0;j<i/2;j++) {
-    c=namebuffer[j];
-    namebuffer[j]=namebuffer[i-j-1];
-	  namebuffer[i-j-1]=c;
-  }
+int trustee_perm(
+  struct dentry *dentry, struct vfsmount *mnt,
+  char *file_name, int unix_ret, int depth, int is_dir) {
+	int oldmask = trustee_default_acl;
+	int height = 0;
+	char *filecount;
+	struct trustee_name trustee_name;
 
-  name.filename=namebuffer;
-  name.dev=dentry->d_sb->s_dev;
-  name.devname=NULL;
-  
-  j=1;
-  for (;;) {
-    c=namebuffer[j];
-    namebuffer[j]=0;
-    if (TRUSTEES_HASDEVNAME(name)) {
-	     name.devname=NULL; //dentry->d_sb->dev_name;
-	     oldmask=get_trustee_mask_for_name(&name,user,oldmask,slash-slashes+!isdir);
-    } else 
-      oldmask=get_trustee_mask_for_name(&name,user,oldmask,slash-slashes+!isdir);
-    slash++;
-    namebuffer[j]=c;
-    for (j++;(j<i) && (namebuffer[j]!='/');j++) ;
-    if (j>=i) break;
-  }
-  kfree(namebuffer);   
-  return oldmask;
-	
+	trustee_name.dev = mnt->mnt_sb->s_dev;
+	trustee_name.devname = mnt->mnt_devname;
+	trustee_name.filename = file_name;
+
+	filecount = file_name + 1;
+	for (;;) {
+		*filecount = 0;
+		oldmask = 
+		   get_trustee_mask_for_name(&trustee_name, oldmask, height - depth + !is_dir);
+		height++;
+		*filecount = '/';
+		for (filecount++;  *filecount && (*filecount != '/'); *filecount++);
+		if (!*filecount) break;
+	}
+
+	return oldmask;
 }
-
-
-				 
-
+	
+	
+	
 static int prepare_trustee_name(const struct trustee_command * c, struct trustee_name * name) {
 	 name->dev=c->dev;
 	 name->filename=kmalloc((strlen(c->filename)+1)*sizeof(char),GFP_KERNEL);
@@ -435,6 +366,7 @@ static int prepare_trustee_name(const struct trustee_command * c, struct trustee
 	 }
 	 return 1;
 }
+
 asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 	int r=-ENOSYS, i;
 	struct trustee_name name;

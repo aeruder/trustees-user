@@ -46,11 +46,13 @@ static int trustees_inode_permission(struct inode *inode,
 	struct dentry *dentry;
 	struct vfsmount *mnt;
 	char *file_name;
-	int ret = 0;
+	int ret;
 	int is_dir;
 	int depth;
 
 	if (trustees_has_root_perm(inode, mask) == 0) return 0;
+
+	ret = trustees_has_unix_perm(inode, mask);
 	
 	mnt = find_inode_mnt(inode, nd);
 	if (unlikely(!mnt)) {
@@ -62,7 +64,6 @@ static int trustees_inode_permission(struct inode *inode,
 	if (unlikely(!dentry)) {
 		dump_stack(); // DEBUG FIXME
 		printk(KERN_ERR "Trustees: dentry does not exist!\n");
-		ret = trustees_has_unix_perm(inode, mask);
 		goto out_mnt;
 	}
 	file_name = trustees_filename_for_dentry(dentry, &depth);
@@ -73,17 +74,13 @@ static int trustees_inode_permission(struct inode *inode,
 	}
 	
 	is_dir = S_ISDIR(inode->i_mode);
-	// If its got a hardlink, we just deny access 
+	// If its got a hardlink, we use unix perms
 	if (!is_dir && (inode->i_nlink > 1)) {
-		printk(KERN_ERR "Trustees: hardlink, denying access to %s\n", file_name);
-		ret = -EACCES;
+		printk(KERN_ERR "Trustees: hardlink, using unix access to %s\n", file_name);
 		goto out;
 	}
 
-
-//	if (!nd) {
-		printk(KERN_INFO "TRUSTEES %d %s on %s\n", inode->i_nlink, file_name, mnt->mnt_devname);
-//	}
+	ret = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir);
 
 out:
 	kfree(file_name);
@@ -92,24 +89,6 @@ out_dentry:
 out_mnt:
 	mntput(mnt);
 	
-/*
-	is_dir = indoe is directory
-	find_alias dentry
-	get_filename
-	check_filename 
-	
-	dentry = d_find_alias(inode);
-	list_for_each_entry(dent, &inode->i_dentry, d_alias) {
-		
-		file_name = trustees_filename_for_dentry(dent);
-		printk(KERN_INFO "TRUSTEES %d %s %s\n", c, file_name, device_name);
-		if (file_name) {
-			kfree(file_name);
-		}
-		c++;
-	}
-
-	*/
 	return ret;
 }
 	
