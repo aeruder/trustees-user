@@ -14,13 +14,45 @@
 
 #include <linux/security.h>
 #include <linux/capability.h>
+#include <linux/mount.h>
+#include <linux/namei.h>
+#include <linux/fs.h>
 
 static int trustees_capable(struct task_struct *tsk, int cap);
+static int trustees_inode_permission(struct inode *inode, 
+    int mask, struct nameidata *nd);
 
+/* Structure where we fill in the various hooks we are implementing in this module
+ */
 struct security_operations trustees_security_ops = {
 	.capable = trustees_capable,
+	.inode_permission = trustees_inode_permission
 };
 
+static int trustees_inode_permission(struct inode *inode, 
+    int mask, struct nameidata *nd)
+{
+	if (!inode)
+	{
+		printk(KERN_INFO "Inode was 0!\n" );
+		return 0;
+	}
+	
+	if (!nd)
+	{
+		printk(KERN_INFO "nd was 0!\n");
+		return 0;
+	}
+	if (!(nd->mnt))
+	{
+		printk(KERN_INFO "mnt was 0!\n");
+		return 0;
+	}
+	printk(KERN_INFO "TRUSTEES %s %p %p %p\n", nd->mnt->mnt_devname, inode->i_pipe, 
+	   inode->i_bdev, inode->i_cdev);
+	return 0;
+}
+	
 /* Return CAP_DAC_OVERRIDE on everything.  We want to handle our own
  * permissions and we don't want the filesystem stuff interfering.
  */

@@ -1,10 +1,14 @@
 ifneq ($(KERNELRELEASE),)
 EXTRA_CFLAGS += -I$(PWD)/include -DTRUSTEES_DEBUG
 obj-m := trustees.o
-trustees-objs := security.o fs.o init.o funcs.o
+trustees-objs := security.o fs.o init.o
 
 else
-KDIR := /home/andy/linux-2.6.7 
+ifeq ($(uml),)
+KDIR := /lib/modules/`uname -r`/build
+else
+KDIR := /home/andy/linux-2.6.8
+endif
 PWD := $(shell pwd)
 
 default:
