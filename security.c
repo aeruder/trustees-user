@@ -115,8 +115,21 @@ static int trustees_capable(struct task_struct *tsk, int cap)
 // This should be called with sb_lock locked
 int initialize_superblocks(void) {
 	struct super_block *sb;
+	struct trustee_name *name;
 
 	list_for_each_entry(sb, super_blocks, s_list) {
+		if (sb->s_security) {
+			printk (KERN_ERR "Superblock already has s_security");
+			continue;
+		}
+			
+		name = kmalloc(sizeof(struct trustee_name));
+		if (!name) {
+			printk (KERN_ERR "Out of memory allocating s_security");
+			continue;
+		}
+	}
+
 		
 		
 
