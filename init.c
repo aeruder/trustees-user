@@ -4,7 +4,8 @@
 #include <linux/security.h>
 #include <linux/capability.h>
 
-#include "ts_security.h"
+#include "security.h"
+#include "fs.h"
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Trustees ACL System");

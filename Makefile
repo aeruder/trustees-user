@@ -1,7 +1,7 @@
 ifneq ($(KERNELRELEASE),)
 EXTRA_CFLAGS += -I$(PWD)/include
 obj-m := trustees.o
-trustees-objs := security.o fs.o # trustees.o
+trustees-objs := security.o fs.o init.o
 
 else
 KDIR := /home/andy/linux-2.6.7 
