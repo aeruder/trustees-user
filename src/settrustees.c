@@ -110,6 +110,7 @@ int main(int argc, char * argv[])
 			break;
 		case 't':
 			trustee_device = strdup(optarg);
+			break;
 		case 'p':
 			prefix=strdup(optarg);
 			break;

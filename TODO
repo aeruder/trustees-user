@@ -1,0 +1,5 @@
+Todo:
+- get rid of memory leak with the trustees hash
+- find out the best way to get the dev number from user space
+
+Done:

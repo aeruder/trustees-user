@@ -38,7 +38,7 @@ static int __init trustees_init(void)
 		return -EINVAL;
 	}
 	
-	TS_DEBUG_MSG(KERN_ALERT "Hello world\n");
+	TS_DEBUG_MSG("Hello world\n");
 
 	return 0;
 }
@@ -47,7 +47,7 @@ static void __exit trustees_exit(void)
 {
 	trustees_deinit_fs();
 	trustees_deinit_security();
-	TS_DEBUG_MSG(KERN_ALERT "Goodbye cruel world!\n");
+	TS_DEBUG_MSG("Goodbye cruel world!\n");
 }
 
 security_initcall(trustees_init);

@@ -51,7 +51,7 @@ extern int trustee_perm(
 
 #define TRUSTEES_INITIAL_HASH_SIZE 20 
 #define TRUSTEES_INITIAL_NAME_BUFFER 256
-#define TRUSTEES_HASDEVNAME(TNAME) ((MAJOR((TNAME).dev))==0)
+#define TRUSTEES_HASDEVNAME(TNAME) ((MAJOR(old_decode_dev((TNAME).dev)))==0)
 
 
 /* name & permission are ignored if command=TRUSTEES_COMMAND_REMOVE_ALL */ 
@@ -59,10 +59,10 @@ extern int trustee_perm(
 extern int trustees_process_command(const struct trustee_command * command);
 
 #ifdef TRUSTEES_DEBUG
-#undef TS_DEBUG_MSG
-#define TS_DEBUG_MSG(...) printk(KERN_DEBUG "Trustees: " __VA_ARGS__)
+#define TS_DEBUG_MSG(...) printk(KERN_ERR "Trustees: " __VA_ARGS__)
 #else
 #define TS_DEBUG_MSG(...)
+#error "Just testing"
 #endif
 
 /*#define TRUSTEES_DEBUG 1*/

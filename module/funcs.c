@@ -177,7 +177,7 @@ static inline int trustee_name_cmp(const struct trustee_name *n1,
 		return ((strcmp(n1->devname, n2->devname) == 0) && 
 		       (strcmp(n1->filename, n2->filename) == 0));
 	else if ((!TRUSTEES_HASDEVNAME(*n1)) && (!TRUSTEES_HASDEVNAME(*n2))) 
-		return ((new_encode_dev(n1->dev) == new_encode_dev(n2->dev)) && 
+		return (((n1->dev) == (n2->dev)) && 
 		       (strcmp(n1->filename, n2->filename) == 0));
 	return 0;
 }
@@ -195,6 +195,8 @@ static struct trustee_hash_element *get_trustee_for_name(
 		if (trustee_hash[i].usage == 1) continue;
 		if (trustee_name_cmp(&trustee_hash[i].name, name)) {
 			up_read(&trustees_hash_sem);
+			TS_DEBUG_MSG("Found a trustee element for %s\n",
+			  name->filename);
 			return trustee_hash + i;
 		}
 	}
@@ -230,9 +232,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_size=TRUSTEES_INITIAL_HASH_SIZE;
 		trustee_hash_used=0;
 		trustee_hash_deleted=0;
-		TS_DEBUG_MSG("Blah2\n");
 		for (i=0;i<trustee_hash_size;i++) trustee_hash[i].usage=0;
-		TS_DEBUG_MSG("Blah3\n");
 		up_write(&trustees_hash_sem);
 	}
 	else if ((trustee_hash_size*3/4<trustee_hash_used) || (trustee_hash_size-2<trustee_hash_used)) { /*hash needed to be rebuilt, rebuilding hash */
@@ -264,13 +264,9 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_deleted=0;
 		up_write(&trustees_hash_sem);
 	}
-	TS_DEBUG_MSG("Blah1\n");
 	down_read(&trustees_hash_sem);
-	TS_DEBUG_MSG("Blah1.1\n");
 
-	dump_stack();
 	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size) TS_DEBUG_MSG("%d %d\n", j, trustee_hash[j].usage);
-	TS_DEBUG_MSG("Blah1.2\n");
 	trustee_hash[j].name=*name;
 	*should_free=0;
 	r=trustee_hash+j;
@@ -323,19 +319,21 @@ int trustee_perm(
 	int oldmask = trustee_default_acl;
 	int height = 0;
 	char *filecount;
+	char c;
 	struct trustee_name trustee_name;
 
-	trustee_name.dev = mnt->mnt_sb->s_dev;
+	trustee_name.dev = old_encode_dev(mnt->mnt_sb->s_dev);
 	trustee_name.devname = mnt->mnt_devname;
 	trustee_name.filename = file_name;
 
 	filecount = file_name + 1;
 	for (;;) {
+		c = *filecount;
 		*filecount = 0;
 		oldmask = 
 		   get_trustee_mask_for_name(&trustee_name, oldmask, height - depth + !is_dir);
 		height++;
-		*filecount = '/';
+		*filecount = c;
 		for (filecount++;  *filecount && (*filecount != '/'); *filecount++);
 		if (!*filecount) break;
 	}
@@ -430,7 +428,6 @@ int trustees_process_command(const struct trustee_command * command) {
 		goto unlk;
 		
 	case TRUSTEE_COMMAND_ADD:
-		TS_DEBUG_MSG("Blah7\n");
 		if (!prepare_trustee_name(&c,&name)) {
 		  r=-ENOMEM;
 		  goto unlk;
