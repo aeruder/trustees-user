@@ -1,70 +1,224 @@
-This is quick installation instructions for UNIX trustees.
+The trustees project is an advanced linux permission system inspired by Netware.
 
-This software is (c) Andrew Ruder 2004 and (c) V.L. Zavadsky, 1999-2000 
-This software is covered by GPL.
+Copyright (C) V.L. Zavadsky, 1999-2000
+Copyright (C) Andrew Ruder,  2004 (aeruder@ksu.edu)
 
-The included module can be compiled for any 2.6.x kernel.
-CONFIG_SECURITY must be part of the kernel.
-Simply enter the module/ directory and type make install
-This will compile it against the source of your currently running
-kernel, if you would like to specify a different kernel to 
-compile against, please use something like
+Current Maintainer:
+	Andrew Ruder <aeruder@ksu.edu>
 
-make KDIR=/path/to/src/linux-2.6.x install
+======
+Table of Contents
+======
 
-The src/ directory contains the program used to set the trustees
-through the trustees 'device'
-Once again, just enter the src/ directory and type make
+I.   Introduction
+II.  Installation
+III. Configuration
+IV.  Usage
+V.   Known Issues/Bugs/"Features"
 
-To use:
-Create a config file (there are examples in the examples/ directory)
-The description of the config file is at the bottom of this file.
+======
+I. Introduction
+======
 
-After that, load the module (modprobe trustees).  The trustees module
-does (or will soon have) a full set of devices to set the trustees,
-set debug levels, check status, etc, so the trustees 'devices' were 
-implemented as a virtual filesystem.  To mount, type
+Trustees is an advanced linux permission system inspired by Netware.  It
+allows a system administrator to attach "trustees" to any directory or file.
+All subdirectories and files in that directory will also inherit these 
+trustees.  Trustee rights can be overridden or added to in subsequent
+directories.
 
-mount -t trusteesfs none /place/to/mount
+Why not use POSIX ACLs?  POSIX ACLs are useful, but require intricate scripts
+to maintain some sort of recursive ACL scheme.  Furthermore, the tools to just
+analyze which ACLs are set where are also equally intricate.  ACLs are designed
+for fine-grained access control.  For example, on my system, giving a user
+write access to all files and directories in usr would require over 140,000
+acls to be set.  Furthermore, how do you check that all these ACLs are what
+you intended them to be?  Quite frankly, you can't.  Enter trustees.  Specify 
+your full system's rights in one small config file and know that your controls 
+on access are what you intended them to be.
 
-Then, use settrustees to load the config file, it wants the location
-of the trustees main 'device' file, so you would run it similarly to
-./settrustees -f /path/to/trustees.conf -t /path/to/mount/trustees
-See -h for more information.  
+======
+II. Installation
+======
 
-If at any time you want to unload the trustees module, you must first
-umount the virtual filesystem.
+the kernel module
 
-_________________________________
-Description of the config file:
+	The included module can be compiled for any 2.6.x kernel. CONFIG_SECURITY,
+	however, must be compiled in.  Assuming this is so, simply enter the
+	module/ directory and type
 
-create file /etc/trustee.conf using the bundled files as examples.
-These are some sample lines with comments
-[dev/hda1]/shared/directory/name:+writers:RWEBX:+readers:REBX  - this is the most typical situation. Group writes has write access to the entire /shared/directory/name directory, but group readers - just read only
-{//samba_server/share_name}/shared/directory/name/top_secret:+security:!DRWEBX - nobody except security grop members can not use top_secret directory 
+	make install
 
+	For non-typical situations, the makefile may not be able to find your
+	kernel source directory.  If you have problems, try compiling with
 
+	make KDIR=/path/to/src/linux-2.6.x install
 
-The file format is follows
-[/block/device]/real_directory_path:user_or_group_name:symbols:user_or_group_name:symbols..........
-[/network/share/name]/real_directory_path:user_or_group_name:symbols:user_or_group_name:symbols..........
-/block/device - name of block device, minor and major are really used
-[/network/share/name - name of netwok share, should be the same as in /proc/mounts
-real_directory_path==path with no symlinks, first / is mandatory, last / is prohibited
-If group name is used here, it should be prefixed by +
-The following symbols are available:
-R - Read any files
-W -Write files and directories
-B - Browse (like UNIX execute for directories)
-E- rEad directories
-X - eXecute files
-U - use UNIX permissions - set by default
+the settrustees tool
 
+	Simple enter the src/ directory and type make.  This will build the
+	settrustees tool.
 
-Modificators
+======
+III. Configuration
+======
 
-C - Clear the permissions (instead of set them)
-D -Deny access (instead of grant)
-! The trustee object applies to all except user or group
-O- One level. The trustee object applies to the surectory and files in in, not to subdirectories
+The default location for the config file should be /etc/trustee.conf
+This is where the settrustees code will look at by default.  (You can use
+the -f option to override).  The config file should have one input per line.
+The syntax of the input is described below.
 
+There are two classes of inputs.  There is a device flags input and trustees
+input.  
+
+device flags
+	The first class, device flags, is specified like this:
+
+*[/block/device]flags
+*{/network/share}flags
+
+	This is used to tell the trustees kernel module certain information about a
+	device.  For example, this is used to specify a case-insensitive
+	filesystem.  If the trustees kernel module doesn't know that a filesystem
+	is case-insensitive, it may give different rights to //smb/share/DIR1 than
+	it gives to //smb/share/dir1 even though they are the same directory.
+
+	Available device flags:
+	I
+		Designate a filesystem as being case-insensitive.
+
+trustees
+	The second class of input, trustees, are specified like this:
+	
+[/block/device]/any/path:usr1:flags:+grp1:flags...
+{/network/share}/any/path:+grp2:flags:*:flags...
+	
+	The path should be the real path, no symlinks.  usr1/grp2/usr2/grp1 should
+	be any user/group names.  The preceding '+' distinguishes a group from a 
+	user.  A * designates that it should apply to all users.  The flags 
+	describe the access that the preceding user/group should receive. 
+	Any number of user:flag or group:flag can be specified on a line.
+	
+	Flag modifiers are also available which can be used to clear a flag
+	on a certain directory or to deny access instead of allowing access.
+
+	This is how the permissions are calculated on a file called:
+	   /path/file1
+	First, two sets of flags are initialized: the allow flags and the
+	deny flags.  The allow flags are initialized to [U] (use normal unix
+	access) and the deny flags are initialized to [].  
+	
+	Then the allow/deny
+	flags are gathered for /.  The flags here are or'd with the appropriate
+	default flags.  So if / gave everybody RWEBX the allow flags would be
+	[URWEBX] and the deny flags would still be [].  If everybody's flags
+	were instead DRWBX the allow flags would be [U] and the deny flags would
+	be [RWBX].  And lastly, if everybody was set to CU the allow flags would
+	be [] and the deny flags would be [].
+	
+	Then the rights are looked up for /path.  The flags here are once again
+	or'd/cleared into the appropriate allow/deny flags as shown above.
+
+	When it has calculated the full allow/deny masks the algorithm is as
+	such:  
+	
+	1. If superuser, permission granted.
+	2. If any mode requested is in the deny flag, the request is denied.
+	3. If the allow mode specifies [U], the unix permissions are calculated
+	   and if they grant access, access is granted.
+	4. If all modes are in the allow flag, access is granted.
+	5. Permission denied.
+	
+	The following flags are available:
+	R 
+		Read any files
+	W
+		Write files and directories
+	B   
+		Browse (like UNIX execute for directories)
+	E
+		rEad directories
+	X
+		eXecute files
+	U
+		use UNIX permissions - set by default
+
+	The following flag modifiers can also be specified along with the flags:
+	C
+		Clear the permissions (instead of set them)
+	D
+		Deny access (instead of grant)
+	! 
+		The trustee object applies to all except user or group
+	O 
+		One level. The trustee object applies to the surectory and files in in, not
+		to subdirectories
+
+Blank lines in the configuration file will be ignored as well as those that
+begin with the character '#'
+
+======
+IV. Usage 
+======
+
+First, you should load the kernel module.  modprobe trustees.ko should do the
+trick.
+
+For the settrustees program to communicate with the kernel module a virtual
+filesystem must be mounted.
+
+mount -t trusteesfs none /some/place/to/mount
+
+This filesystem will have a file called 'trustees' which is the file actually
+used to communicate directly with the kernel module.  This is referred to as
+the 'trustees device'.  Other files available in the filesystem may be
+available to check status of the trustees module, statistics, or to turn
+debugging messages on.
+
+Now we use settrustees to load the config file into the kernel module.  
+	/path/to/settrustees -f /path/to/config
+It should automatically parse /etc/mtab and find where the trusteesfs is
+mounted.  If not, use the -t option to specify the 'trustees device'.
+
+Please note that in order to unload the kernel module, the virtual filesystem
+must first be unmounted.
+
+======
+V. Known Issues/Bugs/"Features"
+======
+
+* Hard links
+
+  The trustees module has to take some precautions against a file existing
+  with more than one name.  The problem is that if full RWEXB access is 
+  given to /tmp, some user joe could make a hardlink of /etc/passwd into
+  /tmp and have full access to it!  That is bad!
+
+  The trustees module can do nothing against cross-directory hard links that
+  exist prior it to it loading, but while it is loading it attempts to stop
+  their creation.
+
+  Basically, if a hard link is requested of a file to another place in the
+  same directory, it is allowed.  If an application tries to make a 
+  inter-directory hard link, it will receive an error code indicating that
+  the two locations are not on the same device. 
+
+  Similarly, a file that has a hard link count of 2 or more cannot be moved
+  out of a directory.  If a file is requested to be moved out of a directory,
+  a return code is given that indicates that the two locations are on different
+  devices.  Programs such as mv and others should compensate and perform a copy
+  instead.
+
+* Case insensitivity
+  
+  Due to lack of intelligence or effort or something, case insensitivity is
+  implemented as referring to all files internally as being lowercase.  The
+  lowercasing function does not take into account locale.  But assuming you
+  aren't specifing trustees to directories with strange non-C-locale
+  capital/lowercase characters, it shouldn't affect anything.  For example,
+  don't specify a trustee to a directory with a capital umlauted 'O' and expect
+  the trustees module to work nicely with it.
+
+  This only applies to directories you are actually specifying in your
+  trustee.conf.  If you have strange characters in your file/directory names
+  that is fine, but you won't be able to specifically mention them in your
+  trustee.conf file.  (They will still inherit trustee permissions correctly.)
