@@ -12,9 +12,6 @@
  *
  */
 
-int trustees_init_security(void);
-void trustees_deinit_security(void);
-
 #ifndef _LINUX_TRUSTEES_H
 #define _LINUX_TRUSTEES_H
 #include <linux/config.h>
@@ -64,12 +61,9 @@ extern int trustees_process_command(const struct trustee_command * command);
 #define TS_DEBUG_MSG(...) printk(KERN_ERR "Trustees: " __VA_ARGS__)
 #else
 #define TS_DEBUG_MSG(...)
-#error "Just testing"
 #endif
 
 /*#define TRUSTEES_DEBUG 1*/
-#define TRUSTEES_DEBUG_USER 500
-#endif
 
 /*
  * Magic number!
@@ -81,3 +75,8 @@ extern int trustees_process_command(const struct trustee_command * command);
 
 int trustees_init_fs(void);
 void trustees_deinit_fs(void);
+
+int trustees_init_security(void);
+void trustees_deinit_security(void);
+
+#endif /* _LINUX_TRUSTEES_H */
