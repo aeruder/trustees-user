@@ -236,7 +236,9 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_size=TRUSTEES_INITIAL_HASH_SIZE;
 		trustee_hash_used=0;
 		trustee_hash_deleted=0;
+		printk("Blah2\n");
 		for (i=0;i<trustee_hash_size;i++) trustee_hash[i].usage=0;
+		printk("Blah3\n");
 		up_write(&trustees_hash_sem);
 	}
 	else if ((trustee_hash_size*3/4<trustee_hash_used) || (trustee_hash_size-2<trustee_hash_used)) { /*hash needed to be rebuilt, rebuilding hash */
@@ -268,9 +270,12 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_deleted=0;
 		up_write(&trustees_hash_sem);
 	}
+	printk("Blah1\n");
 	down_read(&trustees_hash_sem);
+	printk("Blah1.1\n");
 
 	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size);
+	printk("Blah1.2\n");
 	trustee_hash[j].name=*name;
 	*should_free=0;
 	r=trustee_hash+j;
@@ -376,19 +381,20 @@ int trustees_process_command(const struct trustee_command * command) {
 	struct trustee_command c;
 	copy_from_user(&c,command,sizeof(c));
 #ifdef TRUSTEES_DEBUG
-	printk("set trustee called, command %d", c.command);
+	printk("set trustee called, command %d\n", c.command);
 #endif
 	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;
-	down_write(&trustees_hash_sem);
 	switch (c.command) {
 	case TRUSTEE_COMMAND_REMOVE_ALL :
 		r=0;
 		if (trustee_hash==NULL) goto unlk;
+		down_write(&trustees_hash_sem);
 		for (i=0;i<trustee_hash_size;i++) {
 			if (trustee_hash[i].usage==2) free_hash_element(trustee_hash[i]);
 		}
 		kfree(trustee_hash);
 		trustee_hash=NULL;
+		up_write(&trustees_hash_sem);
 		goto unlk;
 	case TRUSTEE_COMMAND_REMOVE:
 		if (!prepare_trustee_name(&c,&name)) {
@@ -429,6 +435,7 @@ int trustees_process_command(const struct trustee_command * command) {
 		goto unlk;
 		
 	case TRUSTEE_COMMAND_ADD:
+		printk("Blah7\n");
 		if (!prepare_trustee_name(&c,&name)) {
 		  r=-ENOMEM;
 		  goto unlk;
@@ -451,7 +458,8 @@ int trustees_process_command(const struct trustee_command * command) {
 		
 	}	
  unlk:
-	up_write(&trustees_hash_sem);
+
+	printk("Returning %d from set trustee func\n", r);
 	return r;
 }
 
