@@ -13,20 +13,16 @@ MODULE_AUTHOR("Andrew E. Ruder <aeruder@ksu.edu>");
 
 static int __init trustees_init(void)
 {
-	/* FIXME: add in secondary module register
-	 * not worry about it now since I have better
-	 * things to worry about. Comprende?
-	 */
-	if (!trustees_init_security()) {
+	if (trustees_init_security() != 0) {
 		return -EINVAL;
 	}
 
-	if (!trustees_init_fs()) {
+	if (trustees_init_fs() != 0) {
 		trustees_deinit_security();
 		return -EINVAL;
 	}
 
-#ifdef TRUSTEE_DEBUG
+#ifdef TRUSTEES_DEBUG
 	printk(KERN_ALERT "Hello world\n");
 #endif
 
@@ -37,7 +33,7 @@ static void __exit trustees_exit(void)
 {
 	trustees_deinit_fs();
 	trustees_deinit_security();
-#ifdef TRUSTEE_DEBUG	
+#ifdef TRUSTEES_DEBUG	
 	printk(KERN_ALERT "Goodbye cruel world!\n");
 #endif
 }

@@ -74,13 +74,8 @@ static ssize_t trustees_read_file(struct file *filp, char *buf,
 static ssize_t trustees_write_file(struct file *filp, const char *buf,
    size_t count, loff_t *offset)
 {
-	return 0;
+	return count;
 }
-
-/* 
- * file ops struct
- */
-
 
 static int trustees_fill_super (struct super_block *sb, void *data, int silent)
 {
