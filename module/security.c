@@ -10,6 +10,23 @@
  *
  * The security module (LSM API) component of the trustees system
  *
+ * One quick note: generally security modules with the LSM are supposed
+ * to be solely restrictive modules.  Unless the trustees module were to 
+ * require that people set all files rwx by all, it could not function
+ * as it is meant to function as a solely restrictive module.
+ *
+ * To compensate, every process is given the capability CAP_DAC_OVERRIDE.
+ * In other words, every process is first given full rights to the filesystem.
+ * This is the only non-restricting portion of this module, since it -does-
+ * in fact give additional permissions.  However, in the inode_permission hook,
+ * any rights the user should not have are taken away.  
+ *
+ * Side effects: Posix ACLs or other filesystem-specific permissions are not 
+ * honored.  Trustees ACLs can (and do) take into account the standard unix
+ * permissions, but any permissions further than that are difficult, to say
+ * the least, to take into account.  I, personally, do not find this to
+ * be a problem since if you are using Trustees ACLs, why also require the use
+ * of another ACL system?
  */
 
 #include <linux/security.h>
@@ -174,6 +191,9 @@ static int trustees_inode_permission(struct inode *inode,
  *          inode in a directory hierarchy, allowing people to make hard
  *          links from one directory to another constitutes a major security
  *          risk.
+ *        - TODO We need to check that the new location will not change the 
+ *          rights of the file.  This negates the use of the above rule.
+ *          Perhaps a virtual filesystem hook could be used to control this behavior?
  *   2. fsuid = 0 
  */
 static int trustees_inode_link(struct dentry *old_dentry,
@@ -190,7 +210,21 @@ static int trustees_inode_link(struct dentry *old_dentry,
 	return -EXDEV;
 }
 
-/* Don't allow people to move hardlinked files into another directory.
+/* TODO We have a few renames to protect against:
+ *   1. Don't allow people to move hardlinked files into another directory.
+ *      - If someone can move hardlinked files into another directory, it
+ *        poses a security risk since additional permissions may come with
+ *        the alternate directory.
+ *   2. We don't want people to move any file that gets different permissions
+ *      in one place than another.
+ *   3. We don't want people to move any directory where the directory either gets
+ *      different permissions, or some file in that directory (or subdirectories thereof)
+ *      gets different permissions.
+ *
+ * In any case above, we return -EXDEV which signifies to the calling program that
+ * the files are on different devices, and assuming the program is written correctly
+ * it should then handle the situation by copying the files and removing the originals
+ * ( which will then use the trustees permissions as they are meant to be used )
  */
 static int trustees_inode_rename(struct inode *old_dir,
 				 struct dentry *old_dentry,
@@ -307,7 +341,6 @@ static inline struct vfsmount *find_inode_mnt(struct inode *inode,
 	 */
 
 	task_lock(current);
-	spin_lock(&vfsmount_lock);
 
 	/* debug */
 	if (unlikely(!current->namespace))
@@ -325,7 +358,6 @@ static inline struct vfsmount *find_inode_mnt(struct inode *inode,
       out:
 	up_read(&ns->sem);
       out_wo_ns:
-	spin_unlock(&vfsmount_lock);
 	task_unlock(current);
 
 	return mnt;
