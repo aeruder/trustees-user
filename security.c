@@ -24,6 +24,8 @@
 static int trustees_capable(struct task_struct *tsk, int cap);
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd);
+static int trustees_has_unix_perm(struct inode *inode, mask);
+
 
 /* Structure where we fill in the various hooks we are implementing in this module
  */
@@ -33,12 +35,13 @@ struct security_operations trustees_security_ops = {
 };
 
 static int trustees_inode_permission(struct inode *inode, 
-    int mask, struct nameidata *nd)
-{
+    int mask, struct nameidata *nd) {
+
+	umode_t mode = inode->i_mode;
 	const char *device_name = NULL;
 	char *file_name;
 	int c = 0;
-	struct dentry *dent;
+	struct dentry *dentry;
 	
 	if (!inode) {
 		printk(KERN_INFO "Inode was 0!\n" );
@@ -52,7 +55,14 @@ static int trustees_inode_permission(struct inode *inode,
 		device_name = nd->mnt->mnt_devname;
 	}
 	
+	is_dir = indoe is directory
+	find_alias dentry
+	get_filename
+	check_filename 
+	
+	dentry = d_find_alias(inode);
 	list_for_each_entry(dent, &inode->i_dentry, d_alias) {
+		
 		file_name = trustees_filename_for_dentry(dent);
 		printk(KERN_INFO "TRUSTEES %d %s %s\n", c, file_name, device_name);
 		if (file_name) {

@@ -35,7 +35,23 @@
 #define FN_DEBUG(_x) printk(KERN_DEBUG _x);
 #endif
 
+struct permission_capsule {
+	struct pemission_capsule * next;
+	struct trustee_permission permission;
+};
+struct trustee_hash_element {
+	int usage; /* 0 -unused, 1- deleted, 2 - used */
+	struct trustee_name  name;
+	struct permission_capsule * list;
+};
+
+static struct trustee_hash_element *trustee_hash = NULL;
+static int trustee_hash_size = 0, trustee_hash_used = 0, trustee_hash_deleted = 0;
+
+
 // The calling method needs to free the buffer created by this function
+// This method returns the filename for a dentry.  This is, of course, 
+// relative to the device.
 char *trustees_filename_for_dentry(struct dentry *dentry) {
 	char *buffer = NULL, *tmpbuf = NULL;
 	int bufsize = FN_CHUNK_SIZE;
@@ -102,107 +118,114 @@ char *trustees_filename_for_dentry(struct dentry *dentry) {
 	return buffer;
 }
 
+// The logic for this was mostly stolen from vfs_permission.  The security API
+// doesn't give a good way to use the actual vfs_permission for this since our
+// CAP_DAC_OVERRIDE causes it to always return 0.  But if we didn't return
+// CAP_DAC_OVERRIDE, we'd never get to handle permissions!  Since we don't need
+// to handle capabilities and dealing with ACLs with trustees loaded isn't an
+// issue for me, the function ends up being pretty simple.
 
-#if 0
-struct permission_capsule {
-	struct pemission_capsule * next;
-	struct trustee_permission permission;
-};
-struct trustee_hash_element {
-	int usage; /* 0 -unused, 1- deleted, 2 - used */
-	struct trustee_name  name;
-	struct permission_capsule * list;
-};
-static struct trustee_hash_element * trustee_hash=NULL;
-static int trustee_hash_size=0, trustee_hash_used=0, trustee_hash_deleted=0;
+int trustees_has_unix_perm(struct inode *inode, int mask) {
+	umode_t mode = inode->i_mode;
 
+	if (current->fsuid == inode->i_uid)
+		mode >>= 6;
+	else if (in_group_p(inode->i_gid))
+		mode >>= 3;
 
-static inline void free_hash_element_list(struct trustee_hash_element  e) {
-	struct permission_capsule * l1, *l2;
-	l1=e.list;
-	while (l1!=NULL) {
-		l2=l1;
-		l1=(void*) l1->next;
+	if (((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask))
+		return 0;
+
+	if (!(mask & MAY_EXEC) ||
+	  (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
+		if (current->fsuid == 0)
+			return 0;
+
+	return -EACCES;
+}
+
+static inline void free_hash_element_list(struct trustee_hash_element e) {
+	struct permission_capsule *l1, *l2;
+	l1 = e.list;
+	while (l1 != NULL) {
+		l2 = l1;
+		l1 = (void *)l1->next;
 		kfree(l2);
 	}
-	e.list=NULL;
-       
+	e.list = NULL;
 }
 
-
-static inline void free_trustee_name(struct trustee_name * name) {
+static inline void free_trustee_name(struct trustee_name *name) {
 	kfree(name->filename);
-	if (TRUSTEE_HASDEVNAME(*name)) {
-	  kfree(name->devname);
+	if (TRUSTEES_HASDEVNAME(*name)) {
+		kfree(name->devname);
 	}
-
 } 
 
-
-
-static inline void free_hash_element(struct trustee_hash_element  e) {
-	e.usage=1;
+static inline void free_hash_element(struct trustee_hash_element e) {
+	e.usage = 1;
 	free_hash_element_list(e);
 	free_trustee_name(&e.name);
+}
+
+
+/* hashing function researched by Karl Nelson <kenelson @ ece ucdavis edu> 
+ * and is used in glib. */
+static inline unsigned int hash_string(const char *s) {
+	unsigned int v = 0;
 	
-       
-}
-
-static inline unsigned int hash_string(const char * s) {
-	unsigned int v=1;
 	while (*s) {
- 
-		v = (v << 2) | (v >> (4*sizeof(v)-2));
-		v = (v+(*s))^(*s);
-		s++;
+		v = (v << 5) - h + *s;
 	}
-	return v;
 
+	return v;
 }
 
-static inline unsigned int hash(const struct trustee_name * name ) {
-	 unsigned int v=hash_string(name->filename);
-	 if (TRUSTEE_HASDEVNAME(*name)) {
-	       v^=hash_string(name->devname);
-	 } else {
-	   v^= new_encode_dev(name->dev);
-	 }
+static inline unsigned int hash(const struct trustee_name *name) {
+	unsigned int v = hash_string(name->filename);
+	
+	if (TRUSTEES_HASDEVNAME(*name)) {
+		v ^= hash_string(name->devname);
+	} else {
+		v^= new_encode_dev(name->dev);
+	}
 
-	 return v;
+	return v;
 } 
 
-static inline int trustee_name_cmp(const struct  trustee_name * n1, const struct  trustee_name * n2) {
-       if (TRUSTEE_HASDEVNAME(*n1) && TRUSTEE_HASDEVNAME(*n2)) 
-	 return (strcmp(n1->devname,n2->devname)==0) &&  (strcmp(n1->filename,n2->filename)==0);
-       else  if ((!TRUSTEE_HASDEVNAME(*n1)) && (!TRUSTEE_HASDEVNAME(*n2))) 
-	 return ((new_encode_dev(n1->dev)==new_encode_dev(n2->dev)) && (strcmp(n1->filename,n2->filename)==0));
-       return 0;
-
+static inline int trustee_name_cmp(const struct trustee_name *n1, 
+                                   const struct trustee_name *n2) {
+	if (TRUSTEES_HASDEVNAME(*n1) && TRUSTEES_HASDEVNAME(*n2)) 
+		return ((strcmp(n1->devname, n2->devname) == 0) && 
+		       (strcmp(n1->filename, n2->filename) == 0));
+	else if ((!TRUSTEE_HASDEVNAME(*n1)) && (!TRUSTEE_HASDEVNAME(*n2))) 
+		return ((new_encode_dev(n1->dev) == new_encode_dev(n2->dev)) && 
+		       (strcmp(n1->filename, n2->filename) == 0));
+	return 0;
 }
 
+static struct trustee_hash_element *get_trustee_for_name(
+    const struct trustee_name *name) {
 
-static struct trustee_hash_element  * get_trustee_for_name(const struct trustee_name  * name) {
 	unsigned int i;
-	if (trustee_hash==NULL) return NULL;
-	for (i=hash(name)%trustee_hash_size;trustee_hash[i].usage;i=(i+1)%trustee_hash_size) {
-		if (trustee_hash[i].usage==1) continue;
-		#ifdef TRUSTEE_DEBUG
-		printk("Comparing in  get_trustee_for_name %s, dev %x i is %d", name->filename,(int)name->dev,i);
-		printk(" to %s\n",to_kdev_t(trustee_hash[i].name).filename);
-		#endif
-		if (trustee_name_cmp(&trustee_hash[i].name,name)) return trustee_hash+i;
+
+	if (trustee_hash == NULL) return NULL;
+
+	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size) {
+		if (trustee_hash[i].usage == 1) continue;
+		if (trustee_name_cmp(&trustee_hash[i].name, name)) return trustee_hash + i;
 	}
 	return NULL;
 
 }
 
 /* This function does not allocate memory for filename and devname. It should be allocated at calling level */
-static struct trustee_hash_element  * getallocate_trustee_for_name(const struct trustee_name  * name, int * should_free) {
-
+static struct trustee_hash_element *getallocate_trustee_for_name
+   (const struct trustee_name  * name, int * should_free) {
 	struct trustee_hash_element  * r,*n;
 	unsigned int i,j,newsize;
-	
 
+	trustees_hash_lock
 	lock_kernel();
 	*should_free=1;
 	r=get_trustee_for_name(name);
@@ -515,17 +538,3 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-#endif
