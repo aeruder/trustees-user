@@ -216,37 +216,36 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	if (r!=NULL) return r;
 
 	if (trustee_hash==NULL){
-#ifdef TRUSTEES_DEBUG
-		printk("Building new trustee hash\n");
-#endif
+		TS_DEBUG_MSG("Building new trustee hash\n");
+
 		down_write(&trustees_hash_sem);
 		trustee_hash=kmalloc(sizeof(struct trustee_hash_element)*TRUSTEES_INITIAL_HASH_SIZE, GFP_KERNEL);
 		if (trustee_hash==NULL) {
-#ifdef TRUSTEES_DEBUG
-			printk("Can not allocate memory for trustee hash\n");
-#endif
+
+			TS_DEBUG_MSG("Can not allocate memory for trustee hash\n");
+
 			up_write(&trustees_hash_sem);
 			return r;
 		}
 		trustee_hash_size=TRUSTEES_INITIAL_HASH_SIZE;
 		trustee_hash_used=0;
 		trustee_hash_deleted=0;
-		printk("Blah2\n");
+		TS_DEBUG_MSG("Blah2\n");
 		for (i=0;i<trustee_hash_size;i++) trustee_hash[i].usage=0;
-		printk("Blah3\n");
+		TS_DEBUG_MSG("Blah3\n");
 		up_write(&trustees_hash_sem);
 	}
 	else if ((trustee_hash_size*3/4<trustee_hash_used) || (trustee_hash_size-2<trustee_hash_used)) { /*hash needed to be rebuilt, rebuilding hash */
 		down_write(&trustees_hash_sem);
 		newsize=(trustee_hash_deleted*3)>trustee_hash_size?trustee_hash_size:trustee_hash_size*2;
-#ifdef TRUSTEES_DEBUG
-		printk("Rebuilding trustee hash, oldsize: %d, newsize %d, deleted %d\n",trustee_hash_size,newsize, trustee_hash_deleted);
-#endif
+
+		TS_DEBUG_MSG("Rebuilding trustee hash, oldsize: %d, newsize %d, deleted %d\n",trustee_hash_size,newsize, trustee_hash_deleted);
+
 		n=kmalloc(sizeof(struct trustee_hash_element)*newsize, GFP_KERNEL);
 		if (n==NULL) {
-#ifdef TRUSTEES_DEBUG
-			printk("Can not allocate memory for trustee hash\n");
-#endif
+
+			TS_DEBUG_MSG("Can not allocate memory for trustee hash\n");
+
 			up_write(&trustees_hash_sem);
 			return r;
 		}
@@ -265,21 +264,21 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_deleted=0;
 		up_write(&trustees_hash_sem);
 	}
-	printk("Blah1\n");
+	TS_DEBUG_MSG("Blah1\n");
 	down_read(&trustees_hash_sem);
-	printk("Blah1.1\n");
+	TS_DEBUG_MSG("Blah1.1\n");
 
 	dump_stack();
-	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size) printk("%d %d\n", j, trustee_hash[j].usage);
-	printk("Blah1.2\n");
+	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size) TS_DEBUG_MSG("%d %d\n", j, trustee_hash[j].usage);
+	TS_DEBUG_MSG("Blah1.2\n");
 	trustee_hash[j].name=*name;
 	*should_free=0;
 	r=trustee_hash+j;
 	r->list=NULL;
 	r->usage=2;
-#ifdef TRUSTEES_DEBUG
-	printk("Added element to trustee hash: j %d, name : %s\n",j,r->name.filename);
-#endif
+
+	TS_DEBUG_MSG("Added element to trustee hash: j %d, name : %s\n",j,r->name.filename);
+
 	trustee_hash_used++;
 	up_read(&trustees_hash_sem);
 	
@@ -350,7 +349,7 @@ static int prepare_trustee_name(const struct trustee_command * c, struct trustee
 	 name->dev=c->dev;
 	 name->filename=kmalloc((strlen(c->filename)+1)*sizeof(char),GFP_KERNEL);
 		if (!name->filename) {
-			printk("No memory to allocate for temporary name buffer");
+			TS_DEBUG_MSG("No memory to allocate for temporary name buffer");
 			return 0;
 		}
 	 copy_from_user(name->filename,c->filename,(strlen(c->filename)+1)*sizeof(char));
@@ -358,7 +357,7 @@ static int prepare_trustee_name(const struct trustee_command * c, struct trustee
 	 if (TRUSTEES_HASDEVNAME(*name)) {
 		 name->devname=kmalloc((strlen(c->devname)+1)*sizeof(char),GFP_KERNEL);
 		 if (!name->devname) {
-			printk("No memory to allocate for temporary device buffer");
+			TS_DEBUG_MSG("No memory to allocate for temporary device buffer");
 			kfree(name->filename);
 
 			return 0;
@@ -376,9 +375,9 @@ int trustees_process_command(const struct trustee_command * command) {
 	int should_free;
 	struct trustee_command c;
 	copy_from_user(&c,command,sizeof(c));
-#ifdef TRUSTEES_DEBUG
-	printk("set trustee called, command %d\n", c.command);
-#endif
+
+	TS_DEBUG_MSG("set trustee called, command %d\n", c.command);
+
 	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;
 	switch (c.command) {
 	case TRUSTEE_COMMAND_REMOVE_ALL :
@@ -431,7 +430,7 @@ int trustees_process_command(const struct trustee_command * command) {
 		goto unlk;
 		
 	case TRUSTEE_COMMAND_ADD:
-		printk("Blah7\n");
+		TS_DEBUG_MSG("Blah7\n");
 		if (!prepare_trustee_name(&c,&name)) {
 		  r=-ENOMEM;
 		  goto unlk;
@@ -455,7 +454,7 @@ int trustees_process_command(const struct trustee_command * command) {
 	}	
  unlk:
 
-	printk("Returning %d from set trustee func\n", r);
+	TS_DEBUG_MSG("Returning %d from set trustee func\n", r);
 	return r;
 }
 

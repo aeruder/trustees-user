@@ -61,7 +61,7 @@ extern int trustees_process_command(const struct trustee_command * command);
 #define TS_DEBUG_MSG(...)
 #ifdef TRUSTEES_DEBUG
 #undef TS_DEBUG_MSG
-#define TS_DEBUG_MSG(...) printk(KERN_DEBUG, __VA_ARGS__);
+#define TS_DEBUG_MSG(...) printk(KERN_DEBUG "Trustees: " __VA_ARGS__);
 #endif
 
 /*#define TRUSTEES_DEBUG 1*/

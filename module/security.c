@@ -182,13 +182,11 @@ int trustees_init_security(void)
 	 * things to worry about. Comprende?
 	 */
 	if (register_security (&trustees_security_ops)) {
-		printk (KERN_INFO "Could not register security component\n");
+		TS_DEBUG_MSG ("Could not register security component\n");
 		return -EINVAL;
 	}
 
-#ifdef TRUSTEES_DEBUG
-	printk (KERN_DEBUG "Security component registered\n");
-#endif
+	TS_DEBUG_MSG ("Security component registered\n");
 
 	return 0;
 }
@@ -196,12 +194,10 @@ int trustees_init_security(void)
 void trustees_deinit_security(void)
 {
 	if (unregister_security (&trustees_security_ops)) {
-		printk (KERN_ALERT "Failure unregistering security component...\n");
+		TS_DEBUG_MSG ("Failure unregistering security component...\n");
 	}
 
-#ifdef TRUSTEES_DEBUG
-	printk (KERN_DEBUG "Security component unregistered\n");
-#endif
+	TS_DEBUG_MSG ("Security component unregistered\n");
 }
 
 static inline int trustees_has_root_perm(struct inode *inode, int mask) {
