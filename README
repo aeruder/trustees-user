@@ -6,6 +6,11 @@ This software is covered by GPL.
 The included module can be compiled for any 2.6.x kernel.
 CONFIG_SECURITY must be part of the kernel.
 Simply enter the module/ directory and type make install
+This will compile it against the source of your currently running
+kernel, if you would like to specify a different kernel to 
+compile against, please use something like
+
+make KDIR=/path/to/src/linux-2.6.x install
 
 The src/ directory contains the program used to set the trustees
 through the trustees 'device'
