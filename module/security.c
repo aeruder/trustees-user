@@ -68,8 +68,8 @@ static int trustees_inode_permission(struct inode *inode,
 	struct dentry *dentry;
 	struct vfsmount *mnt;
 	char *file_name;
-	int ret;
 	int is_dir;
+	int ret;
 	int depth;
 	int amask;
 	int dmask;
@@ -92,6 +92,7 @@ static int trustees_inode_permission(struct inode *inode,
 		// have that happen again to see if the cause is something
 		// that I need to worry about.
 		dump_stack(); // DEBUG FIXME
+		TS_DEBUG_MSG("Inode number: %ld", inode->i_ino);
 		printk(KERN_ERR "Trustees: dentry does not exist!\n");
 		goto out_mnt;
 	}
@@ -169,8 +170,6 @@ static int trustees_inode_link (struct dentry *old_dentry,
  */
 static int trustees_inode_rename (struct inode *old_dir, struct dentry *old_dentry,
                             struct inode *new_dir, struct dentry *new_dentry) {
-	int is_dir;
-
 	if (current->fsuid == 0) return 0;
 	
 	if (S_ISDIR(old_dentry->d_inode->i_mode)) return 0;
