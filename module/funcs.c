@@ -46,12 +46,6 @@ static int trustee_hash_size = 0, trustee_hash_used = 0, trustee_hash_deleted = 
 
 #define FN_CHUNK_SIZE 50
 
-#define FN_DEBUG(_x) 
-#ifdef TRUSTEES_DEBUG
-#undef FN_DEBUG
-#define FN_DEBUG(_x) printk(KERN_DEBUG _x);
-#endif
-
 // The calling method needs to free the buffer created by this function
 // This method returns the filename for a dentry.  This is, of course, 
 // relative to the device.
@@ -63,23 +57,23 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 	int depth = 0;
 
 	if (!dentry) {
-		FN_DEBUG("dentry nil\n");
+		TS_DEBUG_MSG("dentry nil\n");
 		return NULL;
 	}
 
 	if (dentry->d_parent==NULL) {
-		FN_DEBUG("d_parent is null\n");
+		TS_DEBUG_MSG("d_parent is null\n");
 		return NULL;
 	}
 	
 	if (dentry->d_name.name==NULL) {
-		FN_DEBUG("name is null\n");
+		TS_DEBUG_MSG("name is null\n");
 		return NULL;
 	}
 
 	buffer = kmalloc(FN_CHUNK_SIZE, GFP_KERNEL);
 	if (!buffer) {
-		FN_DEBUG("could not allocate filename buffer\n");
+		TS_DEBUG_MSG("could not allocate filename buffer\n");
 		return NULL;
 	}
 
@@ -95,7 +89,7 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 			tmpbuf = kmalloc(bufsize, GFP_KERNEL);
 			if (!tmpbuf) {
 				kfree(buffer);
-				FN_DEBUG("Out of memory allocating tmpbuf\n");
+				TS_DEBUG_MSG("Out of memory allocating tmpbuf\n");
 				return NULL;
 			}
 			strcpy(tmpbuf, buffer);
