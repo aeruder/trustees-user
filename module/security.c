@@ -92,7 +92,6 @@ static int trustees_inode_permission(struct inode *inode,
 		// as possible on it and dump it to logs, because
 		// I'm really not sure how it happens.
 		if (inode == mnt->mnt_root->d_inode) {
-			TS_DEBUG_MSG("Found the root dentry!\n");
 			dentry = dget(mnt->mnt_root);
 		} else {
 			// I have seen this happen once but I did not have any
