@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
-#include <linux/trustee_struct.h> 
+#include <trustees.h> 
 #include <linux/limits.h>
 #include <grp.h>
 #include <sys/types.h>
@@ -15,13 +15,13 @@
 #include <sys/types.h>
 #include <fcntl.h>
 
-int syscall_number;
+char *trustee_device = "/etc/trustees/trustees";
+
 int set_trustee(const struct trustee_command * command)
 {
     int procfd;
-    if (syscall_number) return syscall(syscall_number,command);
     /* syscall_number==0 means to use /proc/trustee/syscall for write */
-    procfd = open ("/proc/trustee/syscall",O_WRONLY);
+	procfd = open (trustee_device, O_WRONLY);
     if (procfd < 0) return errno;
     if (write (procfd,command,sizeof(*command)) != sizeof(*command))
       return errno;
@@ -34,9 +34,9 @@ void print_exit(void) {
 	printf("Usage: settrustee <options>\n");
 	printf("Options:\n");
 	printf("        -f <trustee info file name> see fromat below. Default /etc/trustee.conf.\n");
-	printf("        -s  <syscall> use syscall\n");
-	printf("        -D  delete all trustees from the kernel and exit\n");
-	printf("        -d  delete all trustees from the kernel before processing the trustees in the file\n");
+	printf("        -D delete all trustees from the kernel and exit\n");
+	printf("        -d delete all trustees from the kernel before processing the trustees in the file\n");
+	printf("        -t <trustees device file> specify the 'trustees' file from the mounted trusteefs fs\n");
 	printf("        -p prefix to file names\n");
 	printf("File format:\n");
 	printf("A set of string like:\n");
@@ -94,7 +94,7 @@ int main(int argc, char * argv[])
 	command.filename=name;
 	command.devname=devname;
 
-	while ((j=getopt(argc,argv,"s:f:dDp:"))!=EOF) {
+	while ((j=getopt(argc,argv,"t:f:dDp:"))!=EOF) {
 		switch (j) {
 		case '?': 
 			print_exit();
@@ -108,8 +108,8 @@ int main(int argc, char * argv[])
 		case 'f':
 			filename=strdup(optarg);
 			break;
-		case 's':
-			syscall_number=atoi(optarg);
+		case 't':
+			trustee_device = strdup(optarg);
 		case 'p':
 			prefix=strdup(optarg);
 			break;
@@ -118,20 +118,14 @@ int main(int argc, char * argv[])
 
 	}
 
-	f = fopen("/proc/trustee/syscall","r");
+	f = fopen(trustee_device,"r");
 
 	if (f==NULL)
 	{
-		if (!syscall_number)
-		{
-			printf("use -s <syscall> to set trustees syscall number.\n");
-			exit(-1);
-		}
-	} else {
-		if (fgets(s,40,f)) syscall_number=atoi(s);
-		fclose(f);
+		fprintf(stderr, "Try specifying the trustees mount file with -t\n");
+		fprintf(stderr, "See -h for more information\n");
+		exit (0);
 	}
-	fprintf(stderr,"using syscall no %d\n",syscall_number);
 
 	if (!exitafterflush) {
 		isstdin=!strcmp(filename,"-");
