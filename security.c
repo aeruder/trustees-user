@@ -33,14 +33,29 @@ static inline struct vfsmount *find_inode_mnt(
    struct inode *inode, struct nameidata *nd);
 static inline struct dentry *find_inode_dentry(
    struct inode *inode, struct nameidata *nd);
+static int trustees_inode_rename (struct inode *old_dir, struct dentry *old_dentry,
+                            struct inode *new_dir, struct dentry *new_dentry);
+static int trustees_inode_link (struct dentry *old_dentry,
+                          struct inode *dir, struct dentry *new_dentry);
 
 /* Structure where we fill in the various hooks we are implementing in this module
  */
 struct security_operations trustees_security_ops = {
 	.capable = trustees_capable,
-	.inode_permission = trustees_inode_permission
+	.inode_permission = trustees_inode_permission,
+	.inode_link = trustees_inode_link,
+	.inode_rename = trustees_inode_rename
 };
 
+static int inline trustee_mask_to_normal_mask(int mask, int isdir) {
+	int r=0;
+	if ((mask & TRUSTEE_READ_MASK)  && !isdir) r |= S_IROTH;
+	if ((mask & TRUSTEE_READ_DIR_MASK)  && isdir) r |= S_IROTH;
+	if (mask & TRUSTEE_WRITE_MASK) r |= S_IWOTH;
+	if ((mask & TRUSTEE_BROWSE_MASK) && isdir) r |= S_IXOTH;
+	if ((mask & TRUSTEE_EXECUTE_MASK) && !isdir) r |= S_IXOTH;
+	return r;
+}
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd) {
 	struct dentry *dentry;
@@ -49,6 +64,9 @@ static int trustees_inode_permission(struct inode *inode,
 	int ret;
 	int is_dir;
 	int depth;
+	int amask;
+	int dmask;
+	umode_t mode = inode->i_mode;
 
 	if (trustees_has_root_perm(inode, mask) == 0) return 0;
 
@@ -74,14 +92,38 @@ static int trustees_inode_permission(struct inode *inode,
 	}
 	
 	is_dir = S_ISDIR(inode->i_mode);
-	// If its got a hardlink, we use unix perms
-	if (!is_dir && (inode->i_nlink > 1)) {
-		printk(KERN_ERR "Trustees: hardlink, using unix access to %s\n", file_name);
+
+	amask = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir);
+	dmask = amask >> TRUSTEE_NUM_ACL_BITS;
+
+	/* no permission if denied */
+	if (trustee_mask_to_normal_mask(dmask, is_dir) &  
+	    mask & S_IRWXO) { 
+ 		ret = -EACCES;
 		goto out;
 	}
+	// use unix perms
+	if (!(dmask & TRUSTEE_USE_UNIX_MASK) && 
+	     (amask & TRUSTEE_USE_UNIX_MASK) && (!ret))
+		goto out;
 
-	ret = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir);
-
+	/* if the file isn't executable, then the trustees shouldn't 
+	 * make it executable
+	 */
+	if ((mask & MAY_EXEC) && !(mode & S_IXOTH) && 
+	    !((mode >> 3) & S_IXOTH) & !((mode >> 6) & S_IXOTH) && 
+	    (!is_dir)) {
+		ret = -EACCES;
+		goto out;
+	}
+	/* Check trustees for permission
+	 */
+	if ((trustee_mask_to_normal_mask(amask, is_dir) & mask & S_IRWXO) == mask) {
+		ret = 0;
+		goto out;
+	} else
+		ret = -EACCES;
+	
 out:
 	kfree(file_name);
 out_dentry:
@@ -90,6 +132,33 @@ out_mnt:
 	mntput(mnt);
 	
 	return ret;
+}
+	
+static int trustees_inode_link (struct dentry *old_dentry,
+                          struct inode *dir, struct dentry *new_dentry) {
+	if (current->fsuid == 0) return 0;
+	
+	if (old_dentry->d_parent == new_dentry->d_parent) {
+		return 0;
+	}
+
+	return -EPERM;
+}
+
+static int trustees_inode_rename (struct inode *old_dir, struct dentry *old_dentry,
+                            struct inode *new_dir, struct dentry *new_dentry) {
+	int is_dir;
+
+	if (current->fsuid == 0) return 0;
+	
+	is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
+
+	if (!is_dir && old_dentry->d_inode->i_nlink > 1) {
+		if (old_dentry->d_parent == new_dentry->d_parent)
+			return -EPERM;
+	}
+
+	return 0;
 }
 	
 /* Return CAP_DAC_OVERRIDE on everything.  We want to handle our own

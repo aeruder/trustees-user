@@ -194,7 +194,7 @@ static struct trustee_hash_element *get_trustee_for_name(
 
 	if (trustee_hash == NULL) return NULL;
 
-	if (!down_read_trylock(&trustees_hash_sem)) return NULL;
+	down_read(&trustees_hash_sem);
 
 	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size) {
 		if (trustee_hash[i].usage == 1) continue;
