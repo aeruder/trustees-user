@@ -186,6 +186,12 @@ must first be unmounted.
 V. Known Issues/Bugs/"Features"
 ======
 
+* No ACLs
+
+  POSIX ACLs are not in any way supported by trustees.  If you use them,
+  they will be ignored while trustees is loaded.  Sorry, folks,
+  you either use trustees or you don't use trustees.
+
 * Hard links
 
   The trustees module has to take some precautions against a file existing
