@@ -344,7 +344,7 @@ int  get_trustee_mask_for_name( const struct trustee_name * name,uid_t user,int 
 	
 }
 
-int get_trustee_mask_for_dentry(struct dentry *dentry, struct nameiuid_t user) {
+int get_trustee_mask_for_dentry(struct dentry *dentry, uid_t user, struct nameidata *nd) {
   int oldmask=trustee_default_acl;
   char * namebuffer, * buf2;
   int i,j,k;
@@ -416,7 +416,7 @@ int get_trustee_mask_for_dentry(struct dentry *dentry, struct nameiuid_t user) {
     c=namebuffer[j];
     namebuffer[j]=0;
     if (TRUSTEES_HASDEVNAME(name)) {
-	     name.devname=dentry->d_sb->dev_name;
+	     name.devname=NULL; //dentry->d_sb->dev_name;
 	     oldmask=get_trustee_mask_for_name(&name,user,oldmask,slash-slashes+!isdir);
     } else 
       oldmask=get_trustee_mask_for_name(&name,user,oldmask,slash-slashes+!isdir);
@@ -466,7 +466,7 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 	printk("set trustee called, command %d", c.command);
 #endif
 	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;
-	up_write(&trustee_hash_sem);
+	up_write(&trustees_hash_sem);
 	switch (c.command) {
 	case TRUSTEE_COMMAND_REMOVE_ALL :
 		r=0;
@@ -538,7 +538,7 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 		
 	}	
  unlk:
-	down_write(&trustee_hash_sem);
+	down_write(&trustees_hash_sem);
 	return r;
 }
 

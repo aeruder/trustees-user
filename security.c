@@ -55,7 +55,9 @@ static int trustees_inode_permission(struct inode *inode,
 		dentry = d_find_alias(inode);
 		if (dentry) {
 			file_name = trustees_filename_for_dentry(dentry);
-			printk(KERN_INFO, "TRUSTEES %s has an nd of 
+			printk(KERN_INFO "TRUSTEES %s has an nd of %d\n", file_name, (int)nd);
+		}
+		dput(dentry);
 		device_name = nd->mnt->mnt_devname;
 	}
 	

@@ -45,7 +45,7 @@ extern int trustees_has_unix_perm(struct inode *inode, int mask);
 
 extern int  get_trustee_mask_for_name(const struct trustee_name * name,uid_t user,int oldmask,int height); 
 
-extern int get_trustee_mask_for_dentry(struct dentry * dentry,uid_t user);
+extern int get_trustee_mask_for_dentry(struct dentry * dentry, uid_t user, struct nameidata *nd);
 
 #define TRUSTEES_INITIAL_HASH_SIZE 4
 #define TRUSTEES_INITIAL_NAME_BUFFER 256
