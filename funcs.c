@@ -466,7 +466,7 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 	printk("set trustee called, command %d", c.command);
 #endif
 	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;
-	lock_kernel();
+	up_write(&trustee_hash_sem);
 	switch (c.command) {
 	case TRUSTEE_COMMAND_REMOVE_ALL :
 		r=0;
@@ -538,7 +538,7 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 		
 	}	
  unlk:
-	unlock_kernel();
+	down_write(&trustee_hash_sem);
 	return r;
 }
 
