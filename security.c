@@ -17,6 +17,9 @@
 #include <linux/mount.h>
 #include <linux/namei.h>
 #include <linux/fs.h>
+#include <linux/slab.h>
+
+#include "trustees_private.h"
 
 static int trustees_capable(struct task_struct *tsk, int cap);
 static int trustees_inode_permission(struct inode *inode, 
@@ -32,24 +35,31 @@ struct security_operations trustees_security_ops = {
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd)
 {
-	if (!inode)
-	{
+	const char *device_name = NULL;
+	char *file_name;
+	int c = 0;
+	struct dentry *dent;
+	
+	if (!inode) {
 		printk(KERN_INFO "Inode was 0!\n" );
 		return 0;
 	}
+	if (list_empty(&inode->i_dentry)) {
+		printk(KERN_INFO "dentry list was empty!\n");
+		return 0;
+	}
+	if (nd && nd->mnt) {
+		device_name = nd->mnt->mnt_devname;
+	}
 	
-	if (!nd)
-	{
-		printk(KERN_INFO "nd was 0!\n");
-		return 0;
+	list_for_each_entry(dent, &inode->i_dentry, d_alias) {
+		file_name = trustees_filename_for_dentry(dent);
+		printk(KERN_INFO "TRUSTEES %d %s %s\n", c, file_name, device_name);
+		if (file_name) {
+			kfree(file_name);
+		}
 	}
-	if (!(nd->mnt))
-	{
-		printk(KERN_INFO "mnt was 0!\n");
-		return 0;
-	}
-	printk(KERN_INFO "TRUSTEES %s %p %p %p\n", nd->mnt->mnt_devname, inode->i_pipe, 
-	   inode->i_bdev, inode->i_cdev);
+
 	return 0;
 }
 	

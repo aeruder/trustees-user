@@ -1,7 +1,7 @@
 ifneq ($(KERNELRELEASE),)
 EXTRA_CFLAGS += -I$(PWD)/include -DTRUSTEES_DEBUG
 obj-m := trustees.o
-trustees-objs := security.o fs.o init.o
+trustees-objs := security.o fs.o init.o funcs.o
 
 else
 ifeq ($(uml),)

@@ -27,6 +27,84 @@
 #include "trustees.h"
 #include "trustees_private.h"
 
+#define FN_CHUNK_SIZE 50
+
+#define FN_DEBUG(_x) 
+#ifdef TRUSTEES_DEBUG
+#undef FN_DEBUG
+#define FN_DEBUG(_x) printk(KERN_DEBUG _x);
+#endif
+
+// The calling method needs to free the buffer created by this function
+char *trustees_filename_for_dentry(struct dentry *dentry) {
+	char *buffer = NULL, *tmpbuf = NULL;
+	int bufsize = FN_CHUNK_SIZE;
+	char c;
+	int i, j, k;
+
+	if (!dentry) {
+		FN_DEBUG("dentry nil\n");
+		return NULL;
+	}
+
+	if (dentry->d_parent==NULL) {
+		FN_DEBUG("d_parent is null\n");
+		return NULL;
+	}
+	
+	if (dentry->d_name.name==NULL) {
+		FN_DEBUG("name is null\n");
+		return NULL;
+	}
+
+	buffer = kmalloc(FN_CHUNK_SIZE, GFP_KERNEL);
+	if (!buffer) {
+		FN_DEBUG("could not allocate filename buffer\n");
+		return NULL;
+	}
+
+	*buffer = '/';
+	buffer[i = 1] = '\0';
+	
+	for (;;) {
+		if (IS_ROOT(dentry)) break;
+		
+		j = i + strlen(dentry->d_name.name);
+		if ((j + 1) >= bufsize) { /* reallocate - won't fit */
+			bufsize = (j + 1) + FN_CHUNK_SIZE;
+			tmpbuf = kmalloc(bufsize, GFP_KERNEL);
+			if (!tmpbuf) {
+				kfree(buffer);
+				FN_DEBUG("Out of memory allocating tmpbuf\n");
+				return NULL;
+			}
+			strcpy(tmpbuf, buffer);
+			kfree(buffer);
+			buffer = tmpbuf;
+		}
+
+		// Throw the name in there backward
+		for (k = 0; dentry->d_name.name[k]; k++) {
+			buffer[j - 1 - k] = dentry->d_name.name[k];
+		}
+		i = j;
+		buffer[i++] = '/';
+		dentry = dentry->d_parent;
+	}
+  	buffer[i]=0;
+
+	// buffer is backwards, reverse it
+	for (j = 0; j < (i / 2); j++) {
+		c = buffer[j];
+		buffer[j] = buffer[i - j - 1];
+		buffer[i - j - 1] = c;
+	}
+	
+	return buffer;
+}
+
+
+#if 0
 struct permission_capsule {
 	struct pemission_capsule * next;
 	struct trustee_permission permission;
@@ -451,4 +529,4 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 
 
 
-
+#endif

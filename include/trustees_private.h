@@ -40,6 +40,7 @@ struct trustee_name {
 
 };
 
+extern char *trustees_filename_for_dentry(struct dentry *dent);
 
 extern int  get_trustee_mask_for_name(const struct trustee_name * name,uid_t user,int oldmask,int height); 
 
