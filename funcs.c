@@ -54,11 +54,12 @@ static int trustee_hash_size = 0, trustee_hash_used = 0, trustee_hash_deleted = 
 // The calling method needs to free the buffer created by this function
 // This method returns the filename for a dentry.  This is, of course, 
 // relative to the device.
-char *trustees_filename_for_dentry(struct dentry *dentry) {
+char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 	char *buffer = NULL, *tmpbuf = NULL;
 	int bufsize = FN_CHUNK_SIZE;
 	char c;
 	int i, j, k;
+	int depth = 0;
 
 	if (!dentry) {
 		FN_DEBUG("dentry nil\n");
@@ -106,6 +107,7 @@ char *trustees_filename_for_dentry(struct dentry *dentry) {
 			buffer[j - 1 - k] = dentry->d_name.name[k];
 		}
 		i = j;
+		depth++;
 		buffer[i++] = '/';
 		dentry = dentry->d_parent;
 	}
@@ -117,6 +119,9 @@ char *trustees_filename_for_dentry(struct dentry *dentry) {
 		buffer[j] = buffer[i - j - 1];
 		buffer[i - j - 1] = c;
 	}
+	if (i > 1) buffer[i - 1] = 0;
+
+	if (d) *d = depth;
 	
 	return buffer;
 }

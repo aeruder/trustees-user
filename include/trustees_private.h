@@ -36,12 +36,10 @@ struct trustee_name {
   dev_t dev;
   char * filename;
   char * devname; /* ONLY if MAJOR(dev)==0 */
-      
-
 };
 
-extern char *trustees_filename_for_dentry(struct dentry *dent);
-extern int trustees_has_unix_perm(struct inode *inode, int mask);
+extern char *
+  trustees_filename_for_dentry(struct dentry *dentry, int *d);
 
 extern int  get_trustee_mask_for_name(const struct trustee_name * name,uid_t user,int oldmask,int height); 
 

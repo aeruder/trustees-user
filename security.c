@@ -46,6 +46,9 @@ static int trustees_inode_permission(struct inode *inode,
 	struct dentry *dentry;
 	struct vfsmount *mnt;
 	char *file_name;
+	int ret = 0;
+	int is_dir;
+	int depth;
 
 	if (trustees_has_root_perm(inode, mask) == 0) return 0;
 	
@@ -57,22 +60,37 @@ static int trustees_inode_permission(struct inode *inode,
 		
 	dentry = find_inode_dentry(inode, nd);
 	if (unlikely(!dentry)) {
-		dump_stack();
+		dump_stack(); // DEBUG FIXME
 		printk(KERN_ERR "Trustees: dentry does not exist!\n");
-		mntput(mnt);
-		return -EACCES;
+		ret = trustees_has_unix_perm(inode, mask);
+		goto out_mnt;
+	}
+	file_name = trustees_filename_for_dentry(dentry, &depth);
+	if (!file_name) {
+		printk(KERN_ERR "Trustees: Couldn't allocate filename\n");
+		ret = -EACCES;
+		goto out_dentry;
 	}
 	
-	if (!S_ISDIR(inode->i_nlink
-	file_name = trustees_filename_for_dentry(dentry);
+	is_dir = S_ISDIR(inode->i_mode);
+	// If its got a hardlink, we just deny access 
+	if (!is_dir && (inode->i_nlink > 1)) {
+		printk(KERN_ERR "Trustees: hardlink, denying access to %s\n", file_name);
+		ret = -EACCES;
+		goto out;
+	}
+
 
 //	if (!nd) {
 		printk(KERN_INFO "TRUSTEES %d %s on %s\n", inode->i_nlink, file_name, mnt->mnt_devname);
 //	}
-	kfree(file_name);
 
-	mntput(mnt);
+out:
+	kfree(file_name);
+out_dentry:
 	dput(dentry);
+out_mnt:
+	mntput(mnt);
 	
 /*
 	is_dir = indoe is directory
@@ -92,7 +110,7 @@ static int trustees_inode_permission(struct inode *inode,
 	}
 
 	*/
-	return 0;
+	return ret;
 }
 	
 /* Return CAP_DAC_OVERRIDE on everything.  We want to handle our own
@@ -142,7 +160,7 @@ static inline int trustees_has_root_perm(struct inode *inode, int mask) {
 	umode_t mode = inode->i_mode;
 
 	if (!(mask & MAY_EXEC) ||
-	  (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
+	  (mode & S_IXUGO) || S_ISDIR(mode))
 		if (current->fsuid == 0)
 			return 0;
 	
