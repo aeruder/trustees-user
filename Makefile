@@ -11,5 +11,5 @@ default:
 	$(MAKE) -C $(KDIR) ARCH=um SUBDIRS=$(PWD) modules
 
 clean:
-	rm -f *.o *.mod.* *.ko
+	rm -fr *.o *.mod.* *.ko .*o.cmd .tmp_versions
 endif
