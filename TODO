@@ -3,6 +3,7 @@ Todo:
 - look at registering as a secondary security module
   and at handling secondary security modules
 - commenting and code cleaning
+- test out network shares
 
 Done:
 - get rid of memory leak with the trustees hash (10/27/2004)
