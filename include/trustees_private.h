@@ -49,7 +49,7 @@ extern int trustee_perm(
   struct dentry *dentry, struct vfsmount *mnt,
   char *file_name, int unix_ret, int depth, int is_dir);
 
-#define TRUSTEES_INITIAL_HASH_SIZE 4
+#define TRUSTEES_INITIAL_HASH_SIZE 20 
 #define TRUSTEES_INITIAL_NAME_BUFFER 256
 #define TRUSTEES_HASDEVNAME(TNAME) ((MAJOR((TNAME).dev))==0)
 

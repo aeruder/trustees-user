@@ -159,6 +159,7 @@ static inline unsigned int hash_string(const char *s) {
 	
 	while (*s) {
 		v = (v << 5) - v + *s;
+		s++;
 	}
 
 	return v;
@@ -274,7 +275,8 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	down_read(&trustees_hash_sem);
 	printk("Blah1.1\n");
 
-	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size);
+	dump_stack();
+	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size) printk("%d %d\n", j, trustee_hash[j].usage);
 	printk("Blah1.2\n");
 	trustee_hash[j].name=*name;
 	*should_free=0;
