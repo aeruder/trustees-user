@@ -1,6 +1,7 @@
 /*
  * Trustees ACL Project 
  *
+ * Copyright (c) 1999-2000 Vyacheslav Zavadsky
  * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
  *
  *	This program is free software; you can redistribute it and/or
@@ -9,8 +10,6 @@
  *
  * This code handles the virtual filesystem for trustees.
  *
- * History:
- * 
  */
 
 #include <linux/init.h>
@@ -19,7 +18,7 @@
 #include <asm/atomic.h>
 #include <asm/uaccess.h>
 
-#include "fs.h"
+#include "trustees_private.h"
 
 
 // initialization code for the trustees filesystem

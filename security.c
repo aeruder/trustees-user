@@ -1,6 +1,7 @@
 /*
  * Trustees ACL Project 
  *
+ * Copyright (c) 1999-2000 Vyacheslav Zavadsky
  * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
  *
  *	This program is free software; you can redistribute it and/or
@@ -9,8 +10,6 @@
  *
  * The security module (LSM API) component of the trustees system
  *
- * History:
- * 
  */
 
 #include <linux/security.h>

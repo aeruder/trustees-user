@@ -1,5 +1,15 @@
-/* 
- *  (c) 1999-2000 Vyacheslav Zavadsky
+/*
+ * Trustees ACL Project 
+ *
+ * Copyright (c) 1999-2000 Vyacheslav Zavadsky
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation, version 2.
+ *
+ * Structs, defines and function definitions intended for export 
+ *
  */
 
 #ifndef _LINUX_TRUSTEE_STRUCT_H

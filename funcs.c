@@ -11,8 +11,6 @@
  * This code contains the functions for handling the actual trustees data 
  * and returning the permissions for a given file, etc.
  *
- * History:
- *  2002-12-16 trustees 2.10 released by Vyacheslav Zavadsky
  * 
  */
 

@@ -1,6 +1,7 @@
 /*
  * Trustees ACL Project 
  *
+ * Copyright (c) 1999-2000 Vyacheslav Zavadsky
  * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
  *
  *	This program is free software; you can redistribute it and/or
@@ -10,6 +11,7 @@
  * Module initialization and cleanup 
  *
  * History:
+ *  2002-12-16 trustees 2.10 released by Vyacheslav Zavadsky
  * 
  */
 
@@ -24,7 +26,7 @@
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Trustees ACL System");
-MODULE_AUTHOR("Andrew E. Ruder <aeruder@ksu.edu>");
+MODULE_AUTHOR("Vyacheslav Zavadsky and Andrew E. Ruder <aeruder@ksu.edu>");
 
 static int __init trustees_init(void)
 {
