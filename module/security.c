@@ -255,6 +255,7 @@ static inline int trustees_has_root_perm(struct inode *inode, int mask) {
 
 static inline int trustees_has_unix_perm(struct inode *inode, int mask) {
 	umode_t mode = inode->i_mode;
+	mask &= ~MAY_APPEND;
 
 	if (current->fsuid == inode->i_uid)
 		mode >>= 6;

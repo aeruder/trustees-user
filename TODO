@@ -7,6 +7,7 @@ Todo:
 - majorly cleanup the settrustees code
    especially wrt the lack of newlines everywhere
 
-
 Done:
 - get rid of memory leak with the trustees hash (10/27/2004)
+- figure out what is going on with the .history file in my home directory
+   I don't think unix permissions are being done correctly (10/27/2004)
