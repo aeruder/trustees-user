@@ -63,8 +63,7 @@ char *trustees_filename_for_dentry(struct dentry *dentry) {
 		return NULL;
 	}
 
-	*buffer = '/';
-	buffer[i = 1] = '\0';
+	buffer[i = 0] = '\0';
 	
 	for (;;) {
 		if (IS_ROOT(dentry)) break;
