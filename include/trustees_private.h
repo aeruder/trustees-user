@@ -14,24 +14,14 @@
 
 int trustees_init_security(void);
 void trustees_deinit_security(void);
-/* 
- *  (c) 1999-2000 Vyacheslav Zavadsky
- *  GPLed
- */
 
 #ifndef _LINUX_TRUSTEE_H
 #define _LINUX_TRUSTEE_H
 #include <linux/config.h>
 #include <linux/types.h>
 #include <linux/dcache.h>
-#include <linux/trustee_struct.h>
 #include <linux/kdev_t.h>
-
-
-
-
-
-
+#include "trustees.h"
 
 /* this function evaluates the trustee mask applicable to given name for given user. it is does not checks the trustees for parent and higher levels 
 
@@ -71,35 +61,6 @@ extern int sys_set_trustee(const struct trustee_command * c);
 /*#define TRUSTEE_DEBUG 1*/
 #define TRUSTEE_DEBUG_USER 500
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
- * Trustees ACL Project 
- *
- * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
- *
- *	This program is free software; you can redistribute it and/or
- *	modify it under the terms of the GNU General Public License as
- *	published by the Free Software Foundation, version 2.
- *
- * Shared components of the fs
- *
- * History:
- * 
- */
 
 /*
  * Magic number!

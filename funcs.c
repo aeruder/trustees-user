@@ -16,7 +16,6 @@
 
 #include <linux/fs.h>
 #include <linux/dcache.h>
-#include <linux/trustee.h>
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/slab.h>
@@ -24,6 +23,9 @@
 #include <linux/poll.h>
 #include <linux/sched.h>
 #include <linux/limits.h>
+
+#include "trustees.h"
+#include "trustees_private.h"
 
 struct permission_capsule {
 	struct pemission_capsule * next;
@@ -33,7 +35,6 @@ struct trustee_hash_element {
 	int usage; /* 0 -unused, 1- deleted, 2 - used */
 	struct trustee_name  name;
 	struct permission_capsule * list;
-
 };
 static struct trustee_hash_element * trustee_hash=NULL;
 static int trustee_hash_size=0, trustee_hash_used=0, trustee_hash_deleted=0;
