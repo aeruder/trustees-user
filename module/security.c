@@ -47,6 +47,8 @@ struct security_operations trustees_security_ops = {
 	.inode_rename = trustees_inode_rename
 };
 
+/* Converts a trustee_mask to a normal unix mask
+ */
 static int inline trustee_mask_to_normal_mask(int mask, int isdir) {
 	int r=0;
 	if ((mask & TRUSTEE_READ_MASK)  && !isdir) r |= S_IROTH;
@@ -56,6 +58,11 @@ static int inline trustee_mask_to_normal_mask(int mask, int isdir) {
 	if ((mask & TRUSTEE_EXECUTE_MASK) && !isdir) r |= S_IXOTH;
 	return r;
 }
+
+/* This is the meat of the permissions checking.  First it checks for root,
+ * otherwise it first checks for any errors finding the dentry/vfsmount for 
+ * the inode, and then it looks up the dentry in the trustees hash.
+ */
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd) {
 	struct dentry *dentry;
@@ -80,6 +87,10 @@ static int trustees_inode_permission(struct inode *inode,
 		
 	dentry = find_inode_dentry(inode, nd);
 	if (unlikely(!dentry)) {
+		// I have seen this happen once but I did not have any way
+		// to see what caused it.  I am gonna dump_stack until I 
+		// have that happen again to see if the cause is something
+		// that I need to worry about.
 		dump_stack(); // DEBUG FIXME
 		printk(KERN_ERR "Trustees: dentry does not exist!\n");
 		goto out_mnt;
@@ -135,6 +146,14 @@ out_mnt:
 	return ret;
 }
 	
+/* We should only allow hard links under one of two conditions:
+ *   1. Its in the same directory
+ *        - in a module that bases permissions off of the location of a 
+ *          inode in a directory hierarchy, allowing people to make hard
+ *          links from one directory to another constitutes a major security
+ *          risk.
+ *   2. fsuid = 0 
+ */
 static int trustees_inode_link (struct dentry *old_dentry,
                           struct inode *dir, struct dentry *new_dentry) {
 	if (current->fsuid == 0) return 0;
@@ -146,24 +165,25 @@ static int trustees_inode_link (struct dentry *old_dentry,
 	return -EPERM;
 }
 
+/* Don't allow people to move hardlinked files into another directory.
+ */
 static int trustees_inode_rename (struct inode *old_dir, struct dentry *old_dentry,
                             struct inode *new_dir, struct dentry *new_dentry) {
 	int is_dir;
 
 	if (current->fsuid == 0) return 0;
 	
-	is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
+	if (S_ISDIR(old_dentry->d_inode->i_mode)) return 0;
 
-	if (!is_dir && old_dentry->d_inode->i_nlink > 1) {
-		if (old_dentry->d_parent == new_dentry->d_parent)
-			return -EPERM;
+	if (old_dentry->d_parent != new_dentry->d_parent) {
+		return -EPERM;
 	}
 
 	return 0;
 }
 	
 /* Return CAP_DAC_OVERRIDE on everything.  We want to handle our own
- * permissions and we don't want the filesystem stuff interfering.
+ * permissions (overriding those normally allowed by unix permissions)
  */
 static int trustees_capable(struct task_struct *tsk, int cap)
 {
@@ -176,6 +196,8 @@ static int trustees_capable(struct task_struct *tsk, int cap)
 	return -EPERM;
 }
 
+/* Register the security module
+ */
 int trustees_init_security(void)
 {
 	/* FIXME: add in secondary module register
@@ -192,6 +214,8 @@ int trustees_init_security(void)
 	return 0;
 }
 
+/* Unregister the security module
+ */
 void trustees_deinit_security(void)
 {
 	if (unregister_security (&trustees_security_ops)) {
@@ -201,6 +225,8 @@ void trustees_deinit_security(void)
 	TS_DEBUG_MSG ("Security component unregistered\n");
 }
 
+/* Checks if user has access to the inode due to root status
+ */
 static inline int trustees_has_root_perm(struct inode *inode, int mask) {
 	umode_t mode = inode->i_mode;
 

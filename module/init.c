@@ -47,6 +47,7 @@ static void __exit trustees_exit(void)
 {
 	trustees_deinit_fs();
 	trustees_deinit_security();
+	trustees_clear_all();
 	TS_DEBUG_MSG("Goodbye cruel world!\n");
 }
 

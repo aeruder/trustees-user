@@ -45,6 +45,8 @@ extern int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int
 
 extern int get_trustee_mask_for_dentry(struct dentry * dentry, uid_t user, struct nameidata *nd);
 
+extern void trustees_clear_all(void);
+
 extern int trustee_perm(
   struct dentry *dentry, struct vfsmount *mnt,
   char *file_name, int unix_ret, int depth, int is_dir);

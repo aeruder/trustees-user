@@ -341,8 +341,6 @@ int trustee_perm(
 	return oldmask;
 }
 	
-	
-	
 static int prepare_trustee_name(const struct trustee_command * c, struct trustee_name * name) {
 	 name->dev=c->dev;
 	 name->filename=kmalloc((strlen(c->filename)+1)*sizeof(char),GFP_KERNEL);
@@ -365,8 +363,24 @@ static int prepare_trustee_name(const struct trustee_command * c, struct trustee
 	 return 1;
 }
 
+/* Clear out the hash of trustees and release the hash itself.
+ */
+void trustees_clear_all(void) {
+	int i;
+	if (!trustee_hash) 
+		return;
+	down_write(&trustees_hash_sem);
+	for (i = 0; i < trustee_hash_size; i++) {
+		if (trustee_hash[i].usage == 2) 
+			free_hash_element(trustee_hash[i]);
+	}
+	kfree(trustee_hash);
+	trustee_hash = NULL;
+	up_write(&trustees_hash_sem);
+}
+
 int trustees_process_command(const struct trustee_command * command) {
-	int r=-ENOSYS, i;
+	int r=-ENOSYS;
 	struct trustee_name name;
 	struct trustee_hash_element * e;
 	struct permission_capsule * capsule;
@@ -380,14 +394,7 @@ int trustees_process_command(const struct trustee_command * command) {
 	switch (c.command) {
 	case TRUSTEE_COMMAND_REMOVE_ALL :
 		r=0;
-		if (trustee_hash==NULL) goto unlk;
-		down_write(&trustees_hash_sem);
-		for (i=0;i<trustee_hash_size;i++) {
-			if (trustee_hash[i].usage==2) free_hash_element(trustee_hash[i]);
-		}
-		kfree(trustee_hash);
-		trustee_hash=NULL;
-		up_write(&trustees_hash_sem);
+		trustees_clear_all();
 		goto unlk;
 	case TRUSTEE_COMMAND_REMOVE:
 		if (!prepare_trustee_name(&c,&name)) {

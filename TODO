@@ -1,7 +1,8 @@
 Todo:
-- get rid of memory leak with the trustees hash
 - find out the best way to get the dev number from user space
 - look at registering as a secondary security module
   and at handling secondary security modules
+- commenting and code cleaning
 
 Done:
+- get rid of memory leak with the trustees hash (10/27/2004)
