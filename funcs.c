@@ -27,13 +27,7 @@
 #include "trustees.h"
 #include "trustees_private.h"
 
-#define FN_CHUNK_SIZE 50
-
-#define FN_DEBUG(_x) 
-#ifdef TRUSTEES_DEBUG
-#undef FN_DEBUG
-#define FN_DEBUG(_x) printk(KERN_DEBUG _x);
-#endif
+DECLARE_RWSEM(trustees_hash_sem);
 
 struct permission_capsule {
 	struct pemission_capsule * next;
@@ -48,6 +42,14 @@ struct trustee_hash_element {
 static struct trustee_hash_element *trustee_hash = NULL;
 static int trustee_hash_size = 0, trustee_hash_used = 0, trustee_hash_deleted = 0;
 
+
+#define FN_CHUNK_SIZE 50
+
+#define FN_DEBUG(_x) 
+#ifdef TRUSTEES_DEBUG
+#undef FN_DEBUG
+#define FN_DEBUG(_x) printk(KERN_DEBUG _x);
+#endif
 
 // The calling method needs to free the buffer created by this function
 // This method returns the filename for a dentry.  This is, of course, 
@@ -210,6 +212,8 @@ static struct trustee_hash_element *get_trustee_for_name(
 	unsigned int i;
 
 	if (trustee_hash == NULL) return NULL;
+
+	if (spin_is_locked(trustees_hash_lock)) return NULL;
 
 	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size) {
 		if (trustee_hash[i].usage == 1) continue;
