@@ -62,7 +62,7 @@ the settrustees tool
 III. Configuration
 ======
 
-The default location for the config file should be /etc/trustee.conf
+The default location for the config file should be /etc/trustees.conf
 This is where the settrustees code will look at by default.  (You can use
 the -f option to override).  The config file should have one input per line.
 The syntax of the input is described below.
@@ -219,7 +219,7 @@ V. Known Issues/Bugs/"Features"
   the trustees module to work nicely with it.
 
   This only applies to directories you are actually specifying in your
-  trustee.conf.  If you have strange characters in your file/directory names
+  trustees.conf.  If you have strange characters in your file/directory names
   that is fine, but you won't be able to specifically mention them in your
-  trustee.conf file.  (They will still inherit trustee permissions correctly.)
+  trustees.conf file.  (They will still inherit trustee permissions correctly.)
 
