@@ -92,7 +92,7 @@ static int trustees_inode_permission(struct inode *inode,
 		// have that happen again to see if the cause is something
 		// that I need to worry about.
 		dump_stack(); // DEBUG FIXME
-		TS_DEBUG_MSG("Inode number: %ld", inode->i_ino);
+		TS_DEBUG_MSG("Inode number: %ld\n", inode->i_ino);
 		printk(KERN_ERR "Trustees: dentry does not exist!\n");
 		goto out_mnt;
 	}
