@@ -18,7 +18,7 @@
 #include "trustees.h" 
 
 char *trustee_device = NULL;
-char *trustee_config = "/etc/trustees.conf";
+char *trustee_config = "/etc/trustee.conf";
 
 int set_trustee(const struct trustee_command * command)
 {
