@@ -58,6 +58,7 @@ static int trustees_inode_permission(struct inode *inode,
 		if (file_name) {
 			kfree(file_name);
 		}
+		c++;
 	}
 
 	return 0;
