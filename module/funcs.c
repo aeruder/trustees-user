@@ -322,7 +322,7 @@ int trustee_perm(
 	char c;
 	struct trustee_name trustee_name;
 
-	trustee_name.dev = old_encode_dev(mnt->mnt_sb->s_dev);
+	trustee_name.dev = mnt->mnt_sb->s_dev;
 	trustee_name.devname = mnt->mnt_devname;
 	trustee_name.filename = file_name;
 
@@ -388,6 +388,7 @@ int trustees_process_command(const struct trustee_command * command) {
 	struct trustee_command c;
 	copy_from_user(&c,command,sizeof(c));
 
+	c.dev = new_decode_dev((u32)c.dev);
 	TS_DEBUG_MSG("set trustee called, command %d\n", c.command);
 
 	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;

@@ -1,5 +1,4 @@
 Todo:
-- find out the best way to get the dev number from user space
 - look at registering as a secondary security module
   and at handling secondary security modules
 - commenting and code cleaning
@@ -10,4 +9,5 @@ Todo:
 Done:
 - get rid of memory leak with the trustees hash (10/27/2004)
 - figure out what is going on with the .history file in my home directory
-   I don't think unix permissions are being done correctly (10/27/2004)
+   I don't think unix permissions are being done correctly (10/29/2004)
+- find out the best way to get the dev number from user space (10/31/2004)
