@@ -81,7 +81,8 @@ char *trustees_filename_for_dentry(struct dentry *dentry) {
 		return NULL;
 	}
 
-	buffer[i = 0] = '\0';
+	buffer[0] = '/';
+	buffer[i = 1] = '\0';
 	
 	for (;;) {
 		if (IS_ROOT(dentry)) break;
@@ -120,31 +121,6 @@ char *trustees_filename_for_dentry(struct dentry *dentry) {
 	return buffer;
 }
 
-// The logic for this was mostly stolen from vfs_permission.  The security API
-// doesn't give a good way to use the actual vfs_permission for this since our
-// CAP_DAC_OVERRIDE causes it to always return 0.  But if we didn't return
-// CAP_DAC_OVERRIDE, we'd never get to handle permissions!  Since we don't need
-// to handle capabilities and dealing with ACLs with trustees loaded isn't an
-// issue for me, the function ends up being pretty simple.
-
-int trustees_has_unix_perm(struct inode *inode, int mask) {
-	umode_t mode = inode->i_mode;
-
-	if (current->fsuid == inode->i_uid)
-		mode >>= 6;
-	else if (in_group_p(inode->i_gid))
-		mode >>= 3;
-
-	if (((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask))
-		return 0;
-
-	if (!(mask & MAY_EXEC) ||
-	  (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
-		if (current->fsuid == 0)
-			return 0;
-
-	return -EACCES;
-}
 
 static inline void free_hash_element_list(struct trustee_hash_element e) {
 	struct permission_capsule *l1, *l2;

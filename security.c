@@ -27,6 +27,12 @@ static int trustees_capable(struct task_struct *tsk, int cap);
 static int trustees_inode_permission(struct inode *inode, 
   int mask, struct nameidata *nd);
 
+static inline int trustees_has_root_perm(struct inode *inode, int mask);
+static inline int trustees_has_unix_perm(struct inode *inode, int mask);
+static inline struct vfsmount *find_inode_mnt(
+   struct inode *inode, struct nameidata *nd);
+static inline struct dentry *find_inode_dentry(
+   struct inode *inode, struct nameidata *nd);
 
 /* Structure where we fill in the various hooks we are implementing in this module
  */
@@ -35,82 +41,35 @@ struct security_operations trustees_security_ops = {
 	.inode_permission = trustees_inode_permission
 };
 
-static inline struct vfsmount *find_inode_mnt(
-   struct inode *inode, struct nameidata *nd) {
-	struct namespace *ns;
-	struct vfsmount *mnt = NULL;
-	
-	if (likely(nd)) return mntget(nd->mnt);
-
-	// Okay, we need to find the vfsmount by looking
-	// at the namespace now.
-	
-	task_lock(current);
-	spin_lock(&vfsmount_lock);
-	
-	// debug
-	if (unlikely(!current->namespace)) goto out_wo_ns;
-	ns = current->namespace;
-	down_read(&ns->sem);
-
-	list_for_each_entry(mnt, &ns->list, mnt_list) {
-		if (mnt->mnt_sb == inode->i_sb) {
-			mntget(mnt);
-			goto out;
-		}
-	}
-
-out:
-	up_read(&ns->sem);
-out_wo_ns: 	
-	spin_unlock(&vfsmount_lock);
-	task_unlock(current);
-
-	return mnt;
-}
-
-static inline struct dentry *find_inode_dentry(
-   struct inode *inode, struct nameidata *nd) {
-	struct dentry *dentry;
-
-	if (likely(nd)) return dget(nd->dentry);
-
-	dentry = d_find_alias(inode);
-	if (dentry) dget(dentry);
-
-	return dentry;
-}
-	
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd) {
 	struct dentry *dentry;
 	struct vfsmount *mnt;
 	char *file_name;
-	
-	// debug
-	if (unlikely(!inode)) {
-		printk(KERN_INFO "Inode was 0!\n" );
-		return 0;
-	}
 
+	if (trustees_has_root_perm(inode, mask) == 0) return 0;
+	
 	mnt = find_inode_mnt(inode, nd);
-	if (!mnt) {
-		printk(KERN_ERR "Error: inode does not have a mnt!");
-		return 0;
+	if (unlikely(!mnt)) {
+		printk(KERN_ERR "Trustees: inode does not have a mnt!\n");
+		return -EACCES;// trustees_has_unix_perm(inode, mask);
 	}
 		
 	dentry = find_inode_dentry(inode, nd);
-	if (!dentry) {
-		printk(KERN_ERR "Error: dentry no existy!");
+	if (unlikely(!dentry)) {
+		dump_stack();
+		printk(KERN_ERR "Trustees: dentry does not exist!\n");
 		mntput(mnt);
-		return 0;
+		return -EACCES;
 	}
 	
+	if (!S_ISDIR(inode->i_nlink
 	file_name = trustees_filename_for_dentry(dentry);
 
-	if (!nd) {
-		printk(KERN_INFO "TRUSTEES %s on %s\n", file_name, mnt->mnt_devname);
-	}
+//	if (!nd) {
+		printk(KERN_INFO "TRUSTEES %d %s on %s\n", inode->i_nlink, file_name, mnt->mnt_devname);
+//	}
+	kfree(file_name);
 
 	mntput(mnt);
 	dput(dentry);
@@ -177,4 +136,84 @@ void trustees_deinit_security(void)
 #ifdef TRUSTEES_DEBUG
 	printk (KERN_DEBUG "Security component unregistered\n");
 #endif
+}
+
+static inline int trustees_has_root_perm(struct inode *inode, int mask) {
+	umode_t mode = inode->i_mode;
+
+	if (!(mask & MAY_EXEC) ||
+	  (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
+		if (current->fsuid == 0)
+			return 0;
+	
+	return -EACCES;
+}
+
+// The logic for this was mostly stolen from vfs_permission.  The security API
+// doesn't give a good way to use the actual vfs_permission for this since our
+// CAP_DAC_OVERRIDE causes it to always return 0.  But if we didn't return
+// CAP_DAC_OVERRIDE, we'd never get to handle permissions!  Since we don't need
+// to handle capabilities and dealing with ACLs with trustees loaded isn't an
+// issue for me, the function ends up being pretty simple.
+
+static inline int trustees_has_unix_perm(struct inode *inode, int mask) {
+	umode_t mode = inode->i_mode;
+
+	if (current->fsuid == inode->i_uid)
+		mode >>= 6;
+	else if (in_group_p(inode->i_gid))
+		mode >>= 3;
+
+	if (((mode & mask & (MAY_READ|MAY_WRITE|MAY_EXEC)) == mask))
+		return 0;
+
+	return -EACCES;
+}
+
+// Find a vfsmount given an inode
+static inline struct vfsmount *find_inode_mnt(
+   struct inode *inode, struct nameidata *nd) {
+	struct namespace *ns;
+	struct vfsmount *mnt = NULL;
+	
+	if (likely(nd)) return mntget(nd->mnt);
+
+	// Okay, we need to find the vfsmount by looking
+	// at the namespace now.
+	
+	task_lock(current);
+	spin_lock(&vfsmount_lock);
+	
+	// debug
+	if (unlikely(!current->namespace)) goto out_wo_ns;
+	ns = current->namespace;
+	down_read(&ns->sem);
+
+	list_for_each_entry(mnt, &ns->list, mnt_list) {
+		if (mnt->mnt_sb == inode->i_sb) {
+			mntget(mnt);
+			goto out;
+		}
+	}
+
+out:
+	up_read(&ns->sem);
+out_wo_ns: 	
+	spin_unlock(&vfsmount_lock);
+	task_unlock(current);
+
+	return mnt;
+}
+
+// Find a dentry given an inode
+static inline struct dentry *find_inode_dentry(
+   struct inode *inode, struct nameidata *nd) {
+	struct dentry *dentry;
+
+	if (likely(nd)) return dget(nd->dentry);
+
+	dentry = d_find_alias(inode);
+	if (dentry) dget(dentry);
+
+	return dentry;
 }
