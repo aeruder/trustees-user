@@ -344,7 +344,7 @@ int  get_trustee_mask_for_name( const struct trustee_name * name,uid_t user,int 
 	
 }
 
-int get_trustee_mask_for_dentry(struct dentry * dentry,uid_t user) {
+int get_trustee_mask_for_dentry(struct dentry *dentry, struct nameiuid_t user) {
   int oldmask=trustee_default_acl;
   char * namebuffer, * buf2;
   int i,j,k;

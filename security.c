@@ -51,7 +51,11 @@ static int trustees_inode_permission(struct inode *inode,
 		printk(KERN_INFO "dentry list was empty!\n");
 		return 0;
 	}
-	if (nd && nd->mnt) {
+	if (!nd || !nd->mnt) {
+		dentry = d_find_alias(inode);
+		if (dentry) {
+			file_name = trustees_filename_for_dentry(dentry);
+			printk(KERN_INFO, "TRUSTEES %s has an nd of 
 		device_name = nd->mnt->mnt_devname;
 	}
 	
