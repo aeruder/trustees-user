@@ -1,0 +1,59 @@
+This is quick installation instructions for UNIX trustees.
+This software is (c) V.L. Zavadsky, 1999-2000 
+This software is covered by GPL.
+See http://www.braysystems.com/linux/trustees.html for the most recent version
+The patch provided can be applied to any 2.2.X or 2.4.X kernel. 
+cd /usr/src
+and
+patch -p0 <trustees.XX.patch
+cd linux
+make xconfig or menuconfig or config
+Answer Yes to CONFIG_TRUSTEES question (in FileSystems section)
+make dep; make install; make modules; make modules_install
+
+_________________________________
+create file /etc/trustee.conf using the bundled files as examples.
+These are some sample lines with comments
+[dev/hda1]/shared/directory/name:+writers:RWEBX:+readers:REBX  - this is the most typical situation. Group writes has write access to the entire /shared/directory/name directory, but group readers - just read only
+{//samba_server/share_name}/shared/directory/name/top_secret:+security:!DRWEBX - nobody except security grop members can not use top_secret directory 
+
+
+
+The file format is follows
+[/block/device]/real_directory_path:user_or_group_name:symbols:user_or_group_name:symbols..........
+[/network/share/name]/real_directory_path:user_or_group_name:symbols:user_or_group_name:symbols..........
+/block/device - name of block device, minor and major are really used
+[/network/share/name - name of netwok share, should be the same as in /proc/mounts
+real_directory_path==path with no symlinks, first / is mandatory, last / is prohibited
+If group name is used here, it should be prefixed by +
+The following symbols are available:
+R - Read any files
+W -Write files and directories
+B - Browse (like UNIX execute for directories)
+E- rEad directories
+X - eXecute files
+U - use UNIX permissions - set by default
+
+
+Modificators
+
+C - Clear the permissions (instead of set them)
+D -Deny access (instead of grant)
+! The trustee object applies to all except user or group
+O- One level. The trustee object applies to the surectory and files in in, not to subdirectories
+
+____________________________
+
+Add settrustee to any startup script
+(e.g. rc.local) or use aclsfs SYSV srcipt
+If your may modify the permission system, it is a good idea to add 
+settrustee -f call to crontab
+
+
+
+
+ 
+
+
+
+
