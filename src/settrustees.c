@@ -18,7 +18,7 @@
 #include "trustees.h"
 
 char *trustee_device = NULL;
-char *trustee_config = "/etc/trustee.conf";
+char *trustee_config = "/etc/trustees.conf";
 
 struct dev_desc {
 	char *devname;
@@ -88,8 +88,6 @@ char *extract_to_delimiter(char *s, char end, char **result)
 
 	if (result)
 		*result = res;
-
-	printf("%s\n", res);
 
 	return (*s) ? (s + 1) : NULL;
 }
@@ -203,30 +201,6 @@ char *determine_trustees_mount(void)
 
 	return NULL;
 }
-
-void print_exit(void)
-{
-	printf("Usage: settrustees <options>\n");
-	printf("Options:\n");
-	printf("\n");
-	printf("    -f <config>\n");
-	printf("       Specify the trustees config file to use.\n");
-	printf("       Default: %s\n", trustee_config);
-	printf("    -D\n");
-	printf("       delete all trustees from the kernel and exit\n");
-	printf("    -d\n");
-	printf
-	    ("       delete all trustees from the kernel before processing the trustees in\n");
-	printf("       the file\n");
-	printf("    -t <trustees device file>\n");
-	printf
-	    ("       Specify the 'trustees' file from the mounted trusteefs fs\n");
-	printf("       This can often be automatically detected: %s\n",
-	       trustee_device);
-	printf("\n");
-	exit(-1);
-}
-
 
 void handle_dev_line(char *s, int line)
 {
@@ -434,10 +408,35 @@ void handle_reg_line(char *s, int line)
 	free(command.devname);
 }
 
+
+void print_exit(void)
+{
+	printf("Usage: settrustees <options>\n");
+	printf("Options:\n");
+	printf("\n");
+	printf("    -f <config>\n");
+	printf("       Specify the trustees config file to use.\n");
+	printf("       Default: %s\n", trustee_config);
+	printf("    -D\n");
+	printf("       delete all trustees from the kernel and exit\n");
+	printf("    -n\n");
+	printf
+	    ("       do not delete all trustees from the kernel before processing\n");
+	printf("       the config file\n");
+	printf("    -t <trustees device file>\n");
+	printf
+	    ("       Specify the 'trustees' file from the mounted trusteefs fs\n");
+	printf("       This can often be automatically detected: %s\n",
+	       trustee_device);
+	printf("\n");
+	exit(-1);
+}
+
+
 int main(int argc, char *argv[])
 {
 	int i, j, r;
-	int flush = 0, exitafterflush = 0;
+	int flush = 1, exitafterflush = 0;
 	FILE *f;
 	char name[PATH_MAX + NAME_MAX] = "";
 	char devname[PATH_MAX + NAME_MAX];
@@ -462,13 +461,13 @@ int main(int argc, char *argv[])
 		strcat(trustee_device, "/trustees");
 	}
 
-	while ((j = getopt(argc, argv, "t:f:dhDp:")) != EOF) {
+	while ((j = getopt(argc, argv, "t:f:nhDp:")) != EOF) {
 		switch (j) {
 		case 'h':
 		case '?':
 			print_exit();
-		case 'd':
-			flush = 1;
+		case 'n':
+			flush = 0;
 			break;
 		case 'D':
 			flush = 1;
