@@ -36,10 +36,6 @@ static int trustee_hash_size = 0, trustee_hash_used =
 DECLARE_RWSEM(trustee_ic_sem);
 static struct trustee_ic *trustee_ic_list = NULL;
 
-spinlock_t charbuf_lock = SPIN_LOCK_UNLOCKED;
-static char *devb = NULL;
-static char *fileb = NULL;
-
 #define FN_CHUNK_SIZE 50
 
 /* The calling method needs to free the buffer created by this function
@@ -180,7 +176,7 @@ static inline void free_hash_element_list(struct trustee_hash_element e)
 static inline void free_trustee_name(struct trustee_name *name)
 {
 	kfree(name->filename);
-	if (TRUSTEE_HASDEVNAME(*name)) {
+	if (name->devname) {
 		kfree(name->devname);
 	}
 }
@@ -448,6 +444,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	return oldmask;
 }
 
+/*
 static int prepare_trustee_name(const struct trustee_command *c,
 				struct trustee_name *name)
 {
@@ -475,6 +472,7 @@ static int prepare_trustee_name(const struct trustee_command *c,
 
 	return 1;
 }
+*/
 
 /* Clear out the hash of trustees and release the hash itself.
  * Also gets rid of the ignore-case list
@@ -499,103 +497,77 @@ static void trustees_clear_all(void)
 int trustees_funcs_init_globals(void)
 {
 	trustees_clear_all();
-
-	if (!devb) {
-		devb = kmalloc((PATH_MAX + 4) * sizeof(char), GFP_KERNEL);
-	}
-
-	if (!devb) {
-		printk("Couldn't allocate memory for devb!\n");
-		return -1;
-	}
-
-	if (!fileb) {
-		fileb = kmalloc((PATH_MAX + 4) * sizeof(char), GFP_KERNEL);
-	}
-
-	if (!fileb) {
-		kfree(devb);
-		devb = NULL;
-		printk("Couldn't allocate memory for fileb!\n");
-		return -1;
-	}
-
 	return 0;
 }
 
 int trustees_funcs_cleanup_globals(void)
 {
 	trustees_clear_all();
-
-	spin_lock(&charbuf_lock);
-
-	if (fileb) {
-		kfree(fileb);
-		fileb = NULL;
-	}
-	if (devb) {
-		kfree(devb);
-		devb = NULL;
-	}
-
-	spin_unlock(&charbuf_lock);
-
 	return 0;
 }
 
-/* Should be called with charbuf_lock locked
- */
-static int sanitize_command(struct trustee_command *command,
-			    const struct trustee_command __user * command2)
+static int prepare_trustee_name(const struct trustee_command __user *command,
+				struct trustee_name *name)
 {
 	long devl, filel;
+	char *devb = NULL, *fileb = NULL;
 
-	if ((!command) || (!command2))
-		return -1;
-
-	copy_from_user(command, command2, sizeof(struct trustee_command));
+	if ((!name) || (!command))
+		return 0;
 
 	filel = 0;
 	if (command->filename)
 		filel = strnlen_user(command->filename, PATH_MAX);
-	
+
 	devl = 0;
 	if (command->devname)
 		devl = strnlen_user(command->devname, PATH_MAX);
 
-	if (unlikely(!devb)) {
-		printk(KERN_CRIT "Trustees: devb not initialized!\n");
-		return -4;
-	}
-	if (unlikely(!fileb)) {
-		printk(KERN_CRIT "Trustees: fileb not initialized!\n");
-		return -5;
-	}
-
-	if (!devl || (devl > PATH_MAX)) {
+	if (devl > PATH_MAX) {
 		TS_DEBUG_MSG("device name bad, command ignored.\n");
-		return -2;
+		return 0;
 	}
-	if (!filel || (filel > PATH_MAX)) {
+	if (filel > PATH_MAX) {
 		TS_DEBUG_MSG("file name bad, command ignored.\n");
-		return -3;
+		return 0;
 	}
 
-	if (strncpy_from_user(devb, command->devname, PATH_MAX) < 0) {
-		TS_DEBUG_MSG("garbled c.devname\n");
-		return -5;
+	if (devl) {
+		devb = kmalloc(devl * sizeof(char), GFP_KERNEL);
+		if (!devb) {
+			TS_DEBUG_MSG("Couldn't allocate mem for devb.\n");
+			return 0;
+		}
+
+		if (strncpy_from_user(devb, command->devname, devl) < 0) {
+			TS_DEBUG_MSG("garbled c.devname\n");
+			kfree(devb);
+			return 0;
+		}
 	}
-	if (strncpy_from_user(fileb, command->filename, PATH_MAX) < 0) {
-		TS_DEBUG_MSG("garbled c.devname\n");
-		return -6;
+
+	if (filel) {
+		fileb = kmalloc(filel * sizeof(char), GFP_KERNEL);
+		if (!fileb) {
+			TS_DEBUG_MSG("Couldn't allocate mem for fileb.\n");
+			kfree(devb);
+			return 0;
+		}
+
+		if (strncpy_from_user(fileb, command->filename, filel) < 0) {
+			TS_DEBUG_MSG("garbled c.filename\n");
+			kfree(devb);
+			kfree(fileb);
+			return 0;
+		}
 	}
 
-	command->devname = devb;
-	command->filename = fileb;
+	name->devname = devb;
+	name->filename = fileb;
 
-	command->dev = new_decode_dev((u32) command->dev);
+	name->dev = new_decode_dev((u32) command->dev);
 
-	return 0;
+	return 1;
 }
 
 int trustees_process_command(const struct trustee_command __user * command)
@@ -607,9 +579,7 @@ int trustees_process_command(const struct trustee_command __user * command)
 	int should_free;
 	struct trustee_command c;
 
-	spin_lock(&charbuf_lock);
-
-	sanitize_command(&c, command);
+	copy_from_user(&c, command, sizeof(struct trustee_command));
 
 	TS_DEBUG_MSG("set trustee called, command %d\n", c.command);
 
@@ -695,8 +665,6 @@ int trustees_process_command(const struct trustee_command __user * command)
 
 	}
       unlk:
-
-	spin_unlock(&charbuf_lock);
 
 	TS_DEBUG_MSG("Returning %d from set trustee func\n", r);
 	return r;
