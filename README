@@ -1,17 +1,38 @@
 This is quick installation instructions for UNIX trustees.
-This software is (c) V.L. Zavadsky, 1999-2000 
+
+This software is (c) Andrew Ruder 2004 and (c) V.L. Zavadsky, 1999-2000 
 This software is covered by GPL.
-See http://www.braysystems.com/linux/trustees.html for the most recent version
-The patch provided can be applied to any 2.2.X or 2.4.X kernel. 
-cd /usr/src
-and
-patch -p0 <trustees.XX.patch
-cd linux
-make xconfig or menuconfig or config
-Answer Yes to CONFIG_TRUSTEES question (in FileSystems section)
-make dep; make install; make modules; make modules_install
+
+The included module can be compiled for any 2.6.x kernel.
+CONFIG_SECURITY must be part of the kernel.
+Simply enter the module/ directory and type make install
+
+The src/ directory contains the program used to set the trustees
+through the trustees 'device'
+Once again, just enter the src/ directory and type make
+
+To use:
+Create a config file (there are examples in the examples/ directory)
+The description of the config file is at the bottom of this file.
+
+After that, load the module (modprobe trustees).  The trustees module
+does (or will soon have) a full set of devices to set the trustees,
+set debug levels, check status, etc, so the trustees 'devices' were 
+implemented as a virtual filesystem.  To mount, type
+
+mount -t trusteesfs none /place/to/mount
+
+Then, use settrustees to load the config file, it wants the location
+of the trustees main 'device' file, so you would run it similarly to
+./settrustees -f /path/to/trustees.conf -t /path/to/mount/trustees
+See -h for more information.  
+
+If at any time you want to unload the trustees module, you must first
+umount the virtual filesystem.
 
 _________________________________
+Description of the config file:
+
 create file /etc/trustee.conf using the bundled files as examples.
 These are some sample lines with comments
 [dev/hda1]/shared/directory/name:+writers:RWEBX:+readers:REBX  - this is the most typical situation. Group writes has write access to the entire /shared/directory/name directory, but group readers - just read only
@@ -41,19 +62,4 @@ C - Clear the permissions (instead of set them)
 D -Deny access (instead of grant)
 ! The trustee object applies to all except user or group
 O- One level. The trustee object applies to the surectory and files in in, not to subdirectories
-
-____________________________
-
-Add settrustee to any startup script
-(e.g. rc.local) or use aclsfs SYSV srcipt
-If your may modify the permission system, it is a good idea to add 
-settrustee -f call to crontab
-
-
-
-
- 
-
-
-
 
