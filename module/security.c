@@ -87,14 +87,23 @@ static int trustees_inode_permission(struct inode *inode,
 		
 	dentry = find_inode_dentry(inode, nd);
 	if (unlikely(!dentry)) {
-		// I have seen this happen once but I did not have any way
-		// to see what caused it.  I am gonna dump_stack until I 
-		// have that happen again to see if the cause is something
-		// that I need to worry about.
-		dump_stack(); // DEBUG FIXME
-		TS_DEBUG_MSG("Inode number: %ld\n", inode->i_ino);
-		printk(KERN_ERR "Trustees: dentry does not exist!\n");
-		goto out_mnt;
+		// Most of the time when this happens, it is the /
+		// If it is not, we need to dump as much information
+		// as possible on it and dump it to logs, because
+		// I'm really not sure how it happens.
+		if (inode == mnt->mnt_root->d_inode) {
+			TS_DEBUG_MSG("Found the root dentry!\n");
+			dentry = dget(mnt->mnt_root);
+		} else {
+			// I have seen this happen once but I did not have any
+			// way to see what caused it.  I am gonna dump_stack
+			// until I have that happen again to see if the cause
+			// is something that I need to worry about.
+			dump_stack(); // DEBUG FIXME
+			TS_DEBUG_MSG("Inode number: %ld\n", inode->i_ino);
+			printk(KERN_ERR "Trustees: dentry does not exist!\n");
+			goto out_mnt;
+		}
 	}
 	file_name = trustees_filename_for_dentry(dentry, &depth);
 	if (!file_name) {
@@ -301,7 +310,6 @@ static inline struct dentry *find_inode_dentry(
 	if (likely(nd)) return dget(nd->dentry);
 
 	dentry = d_find_alias(inode);
-	if (dentry) dget(dentry);
 
 	return dentry;
 }

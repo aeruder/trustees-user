@@ -195,8 +195,8 @@ static struct trustee_hash_element *get_trustee_for_name(
 		if (trustee_hash[i].usage == 1) continue;
 		if (trustee_name_cmp(&trustee_hash[i].name, name)) {
 			up_read(&trustees_hash_sem);
-			TS_DEBUG_MSG("Found a trustee element for %s\n",
-			  name->filename);
+//			TS_DEBUG_MSG("Found a trustee element for %s\n",
+//			  name->filename);
 			return trustee_hash + i;
 		}
 	}
