@@ -1,5 +1,19 @@
-/* 
- *  (c) 1999-2000 Vyacheslav Zavadsky
+/*
+ * Trustees ACL Project 
+ *
+ * Copyright (c) 1999-2000 Vyacheslav Zavadsky
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation, version 2.
+ *
+ * This code contains the functions for handling the actual trustees data 
+ * and returning the permissions for a given file, etc.
+ *
+ * History:
+ *  2002-12-16 trustees 2.10 released by Vyacheslav Zavadsky
+ * 
  */
 
 #include <linux/fs.h>

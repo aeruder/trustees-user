@@ -1,3 +1,18 @@
+/*
+ * Trustees ACL Project 
+ *
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation, version 2.
+ *
+ * This code handles the virtual filesystem for trustees.
+ *
+ * History:
+ * 
+ */
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>

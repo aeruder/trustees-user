@@ -1,3 +1,18 @@
+/*
+ * Trustees ACL Project 
+ *
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation, version 2.
+ *
+ * The security module (LSM API) component of the trustees system
+ *
+ * History:
+ * 
+ */
+
 #include <linux/security.h>
 #include <linux/capability.h>
 
