@@ -133,7 +133,7 @@ static inline void add_ic_dev(dev_t dev, char *devname) {
 
 	down_write(&trustee_ic_sem);
 	ic->next = trustee_ic_list;
-	trustee_ic_list = ic->next;
+	trustee_ic_list = ic;
 	up_write(&trustee_ic_sem);
 }
 
