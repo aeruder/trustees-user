@@ -112,6 +112,29 @@ static int trustees_capable(struct task_struct *tsk, int cap)
 }
 
 
+// This should be called with sb_lock locked
+int initialize_superblocks(void) {
+	struct super_block *sb;
+
+	list_for_each_entry(sb, super_blocks, s_list) {
+		
+		
+
+	
+	struct namespace *namespace;
+	
+	if (likely(nd)) return nd;
+
+	namespace = current->namespace;
+	get_namespace(namespace);
+
+	if (unlikely(!namespace)) {
+		printk(KERN_ERR "namespace is NULL!");
+		return NULL;
+	}
+
+}
+
 int trustees_init_security(void)
 {
 	/* FIXME: add in secondary module register
