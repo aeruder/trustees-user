@@ -56,10 +56,7 @@ extern int trustee_perm(
 
 /* name & permission are ignored if command=TRUSTEES_COMMAND_REMOVE_ALL */ 
 /*  permission is ignored if command=TRUSTEES_COMMAND_REMOVE */ 
-
-
-
-extern int sys_set_trustee(const struct trustee_command * c); 
+extern int trustees_process_command(const struct trustee_command * command);
 
 /*#define TRUSTEES_DEBUG 1*/
 #define TRUSTEES_DEBUG_USER 500

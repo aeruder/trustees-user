@@ -149,5 +149,13 @@ static ssize_t trustees_read_status(struct file *filp, char *buf,
 static ssize_t trustees_write_trustees(struct file *filp, const char *buf,
                              size_t count, loff_t *offset)
 {
-	return count;
+	if (count != sizeof(struct trustee_command)) {
+		return -EIO;
+	}
+
+	if (!trustees_process_command((const struct trustee_command *)buf)) {
+		return count;
+	}
+
+	return -EIO;
 }

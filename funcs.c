@@ -367,7 +367,7 @@ static int prepare_trustee_name(const struct trustee_command * c, struct trustee
 	 return 1;
 }
 
-asmlinkage int sys_set_trustee(const struct trustee_command * command) {
+int trustees_process_command(const struct trustee_command * command) {
 	int r=-ENOSYS, i;
 	struct trustee_name name;
 	struct trustee_hash_element * e;
