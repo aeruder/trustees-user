@@ -1,4 +1,3 @@
-#include 
 /*
  * Magic number!
  * 
@@ -7,4 +6,5 @@
  */
 #define TRUSTEES_MAGIC 0x32236975
 
-extern struct file_system_type trustees_filesystem;
+int trustees_init_fs(void);
+void trustees_deinit_fs(void);

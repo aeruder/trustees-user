@@ -1,11 +1,11 @@
 ifneq ($(KERNELRELEASE),)
+EXTRA_CFLAGS += -I$(PWD)/include
 obj-m := trustees.o
-trustees-objs := ts_security.o ts_fs.o trustees.o
+trustees-objs := security.o fs.o # trustees.o
 
 else
 KDIR := /home/andy/linux-2.6.7 
 PWD := $(shell pwd)
-CFLAGS := -I./include
 
 default:
 	$(MAKE) -C $(KDIR) ARCH=um SUBDIRS=$(PWD) modules

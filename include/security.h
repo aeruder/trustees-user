@@ -1,2 +1,2 @@
-struct security_operations;
-extern struct security_operations trustees_security_ops;
+int trustees_init_security(void)
+void trustees_deinit_security(void)
