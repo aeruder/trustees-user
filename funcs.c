@@ -379,7 +379,7 @@ int trustees_process_command(const struct trustee_command * command) {
 	printk("set trustee called, command %d", c.command);
 #endif
 	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;
-	up_write(&trustees_hash_sem);
+	down_write(&trustees_hash_sem);
 	switch (c.command) {
 	case TRUSTEE_COMMAND_REMOVE_ALL :
 		r=0;
@@ -451,7 +451,7 @@ int trustees_process_command(const struct trustee_command * command) {
 		
 	}	
  unlk:
-	down_write(&trustees_hash_sem);
+	up_write(&trustees_hash_sem);
 	return r;
 }
 
