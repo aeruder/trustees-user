@@ -58,10 +58,11 @@ extern int trustee_perm(
 /*  permission is ignored if command=TRUSTEES_COMMAND_REMOVE */ 
 extern int trustees_process_command(const struct trustee_command * command);
 
-#define TS_DEBUG_MSG(...)
 #ifdef TRUSTEES_DEBUG
 #undef TS_DEBUG_MSG
-#define TS_DEBUG_MSG(...) printk(KERN_DEBUG "Trustees: " __VA_ARGS__);
+#define TS_DEBUG_MSG(...) printk(KERN_DEBUG "Trustees: " __VA_ARGS__)
+#else
+#define TS_DEBUG_MSG(...)
 #endif
 
 /*#define TRUSTEES_DEBUG 1*/
