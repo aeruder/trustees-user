@@ -1,0 +1,2 @@
+struct security_operations;
+extern struct security_operations trustees_security_ops;
