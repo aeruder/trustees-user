@@ -6,13 +6,15 @@ trustees-objs := security.o fs.o init.o funcs.o
 else
 ifeq ($(uml),)
 KDIR := /lib/modules/`uname -r`/build
+ARCH :=
 else
 KDIR := /home/andy/linux-2.6.8
+ARCH := ARCH=um 
 endif
 PWD := $(shell pwd)
 
 default:
-	$(MAKE) -C $(KDIR) ARCH=um SUBDIRS=$(PWD) modules
+	$(MAKE) -C $(KDIR) $(ARCH) SUBDIRS=$(PWD) modules
 
 clean:
 	rm -fr *.o *.mod.* *.ko .*o.cmd .tmp_versions
