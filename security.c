@@ -108,7 +108,12 @@ static int trustees_inode_permission(struct inode *inode,
 	
 	file_name = trustees_filename_for_dentry(dentry);
 
-	printk(KERN_INFO "TRUSTEES %s on %s\n", file_name, mnt->mnt_devname);
+	if (!nd) {
+		printk(KERN_INFO "TRUSTEES %s on %s\n", file_name, mnt->mnt_devname);
+	}
+
+	mntput(mnt);
+	dput(dentry);
 	
 /*
 	is_dir = indoe is directory
