@@ -165,7 +165,7 @@ static inline unsigned int hash(const struct trustee_name *name) {
 	if (TRUSTEES_HASDEVNAME(*name)) {
 		v ^= hash_string(name->devname);
 	} else {
-		v^= new_encode_dev(name->dev);
+		v ^= new_encode_dev(name->dev);
 	}
 
 	return v;
@@ -266,7 +266,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	}
 	down_read(&trustees_hash_sem);
 
-	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size) TS_DEBUG_MSG("%d %d\n", j, trustee_hash[j].usage);
+	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size);
 	trustee_hash[j].name=*name;
 	*should_free=0;
 	r=trustee_hash+j;
