@@ -3,6 +3,7 @@ Todo:
   and at handling secondary security modules
     -- I'm not sure I even want to do this
 - commenting and code cleaning
+- some sort of automated test system
 
 Done:
 - get rid of memory leak with the trustees hash (10/27/2004)
@@ -14,3 +15,4 @@ Done:
 - test bad inputs on the config file (11/6/2004)
 - test out network shares (11/6/2004)
 - implement case insensitive file system support (11/7/2004)
+- make -d default and add an option to get rid of it. (11/13/2004)
