@@ -56,6 +56,12 @@ struct trustee_permission {
 	} u;
 };
 
+#ifndef __KERNEL__
+#ifndef __user
+#define __user 
+#endif
+#endif
+
 struct trustee_command {
 	int command;
 	struct trustee_permission permission;
