@@ -17,8 +17,6 @@
 #define _LINUX_TRUSTEE_STRUCT_H
 #include <linux/types.h>
 
-
-
 #define TRUSTEE_EXECUTE_BIT 0
 #define TRUSTEE_READ_BIT 1
 #define TRUSTEE_WRITE_BIT 2
