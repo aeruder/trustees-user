@@ -38,8 +38,12 @@ static int __init trustees_init(void)
 		trustees_deinit_security();
 		return -EINVAL;
 	}
-	
-	TS_DEBUG_MSG("Hello world\n");
+
+	if (trustees_funcs_init_globals() != 0) {
+		trustees_deinit_fs();
+		trustees_deinit_security();
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -48,8 +52,7 @@ static void __exit trustees_exit(void)
 {
 	trustees_deinit_fs();
 	trustees_deinit_security();
-	trustees_clear_all();
-	TS_DEBUG_MSG("Goodbye cruel world!\n");
+	trustees_funcs_cleanup_globals();
 }
 
 security_initcall(trustees_init);

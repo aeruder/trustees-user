@@ -24,38 +24,39 @@
 
 struct trustee_ic {
 	dev_t dev;
-	char * devname; /* ONLY if MAJOR(dev)==0 */
+	char *devname;		/* ONLY if MAJOR(dev)==0 */
 	struct trustee_ic *next;
 };
 
 struct trustee_name {
 	dev_t dev;
-	char * filename;
-	char * devname; /* ONLY if MAJOR(dev)==0 */
+	char *filename;
+	char *devname;		/* ONLY if MAJOR(dev)==0 */
 };
 
 struct trustee_permission_capsule {
-	struct pemission_capsule * next;
+	struct pemission_capsule *next;
 	struct trustee_permission permission;
 };
 struct trustee_hash_element {
-	int usage; /* 0 -unused, 1- deleted, 2 - used */
-	struct trustee_name  name;
-	struct trustee_permission_capsule * list;
+	int usage;		/* 0 -unused, 1- deleted, 2 - used */
+	struct trustee_name name;
+	struct trustee_permission_capsule *list;
 };
 
-extern char *
-  trustees_filename_for_dentry(struct dentry *dentry, int *d);
+extern char *trustees_filename_for_dentry(struct dentry *dentry, int *d);
 
-extern void trustees_clear_all(void);
+extern int trustees_funcs_init_globals(void);
+extern int trustees_funcs_cleanup_globals(void);
 
-extern int trustee_perm(
-  struct dentry *dentry, struct vfsmount *mnt,
-  char *file_name, int unix_ret, int depth, int is_dir);
+extern int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
+			char *file_name, int unix_ret, int depth,
+			int is_dir);
 
-extern int trustees_process_command(const struct trustee_command * command);
+extern int trustees_process_command(const struct trustee_command __user *
+				    command);
 
-#define TRUSTEE_INITIAL_HASH_SIZE 20 
+#define TRUSTEE_INITIAL_HASH_SIZE 20
 #define TRUSTEE_INITIAL_NAME_BUFFER 256
 #define TRUSTEE_HASDEVNAME(TNAME) (MAJOR((TNAME).dev)==0)
 
@@ -80,5 +81,4 @@ void trustees_deinit_fs(void);
 
 int trustees_init_security(void);
 void trustees_deinit_security(void);
-
-#endif /* _LINUX_TRUSTEES_H */
+#endif				/* _LINUX_TRUSTEES_H */

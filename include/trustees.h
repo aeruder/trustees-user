@@ -38,30 +38,30 @@
 #define TRUSTEE_ONE_LEVEL_BIT 9
 #define TRUSTEE_NOT_BIT 10
 #define TRUSTEE_ALL_BIT 11
-#define TRUSTEE_ALLOW_DENY_MASK (1 <<  TRUSTEE_ALLOW_DENY_BIT) /* set if deny */
+#define TRUSTEE_ALLOW_DENY_MASK (1 <<  TRUSTEE_ALLOW_DENY_BIT)	/* set if deny */
 #define TRUSTEE_IS_GROUP_MASK (1 <<  TRUSTEE_IS_GROUP_BIT)
-#define TRUSTEE_CLEAR_SET_MASK (1 <<  TRUSTEE_CLEAR_SET_BIT) /* set if clear */
-#define TRUSTEE_ONE_LEVEL_MASK (1 <<  TRUSTEE_ONE_LEVEL_BIT) 
+#define TRUSTEE_CLEAR_SET_MASK (1 <<  TRUSTEE_CLEAR_SET_BIT)	/* set if clear */
+#define TRUSTEE_ONE_LEVEL_MASK (1 <<  TRUSTEE_ONE_LEVEL_BIT)
 #define TRUSTEE_NOT_MASK (1 <<  TRUSTEE_NOT_BIT)
 #define TRUSTEE_ALL_MASK (1 <<  TRUSTEE_ALL_BIT)
 
 #define trustee_acl __u16
-#define trustee_default_acl TRUSTEE_USE_UNIX_MASK 
+#define trustee_default_acl TRUSTEE_USE_UNIX_MASK
 
 struct trustee_permission {
-  	trustee_acl mask;
+	trustee_acl mask;
 	union {
 		__kernel_uid_t uid;
 		__kernel_gid_t gid;
-	}  u;
+	} u;
 };
 
 struct trustee_command {
-  int command;
-  struct trustee_permission  permission;
-  long dev;
-  char * filename;
-  char * devname;
+	int command;
+	struct trustee_permission permission;
+	long dev;
+	char *filename;
+	char *devname;
 };
 
 #define TRUSTEE_COMMAND_ADD 1
@@ -70,17 +70,4 @@ struct trustee_command {
 #define TRUSTEE_COMMAND_REMOVE 4
 #define TRUSTEE_COMMAND_MAKE_IC 5
 
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
+#endif /* _LINUX_TRUSTEE_STRUCT_H */

@@ -30,17 +30,24 @@
 
 DECLARE_RWSEM(trustee_hash_sem);
 static struct trustee_hash_element *trustee_hash = NULL;
-static int trustee_hash_size = 0, trustee_hash_used = 0, trustee_hash_deleted = 0;
+static int trustee_hash_size = 0, trustee_hash_used =
+    0, trustee_hash_deleted = 0;
 
 DECLARE_RWSEM(trustee_ic_sem);
 static struct trustee_ic *trustee_ic_list = NULL;
 
+spinlock_t charbuf_lock = SPIN_LOCK_UNLOCKED;
+static char *devb = NULL;
+static char *fileb = NULL;
+
 #define FN_CHUNK_SIZE 50
 
-// The calling method needs to free the buffer created by this function
-// This method returns the filename for a dentry.  This is, of course, 
-// relative to the device.
-char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
+/* The calling method needs to free the buffer created by this function
+ * This method returns the filename for a dentry.  This is, of course, 
+ * relative to the device.
+ */
+char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
+{
 	char *buffer = NULL, *tmpbuf = NULL;
 	int bufsize = FN_CHUNK_SIZE;
 	char c;
@@ -52,12 +59,12 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 		return NULL;
 	}
 
-	if (dentry->d_parent==NULL) {
+	if (dentry->d_parent == NULL) {
 		TS_DEBUG_MSG("d_parent is null\n");
 		return NULL;
 	}
-	
-	if (dentry->d_name.name==NULL) {
+
+	if (dentry->d_name.name == NULL) {
 		TS_DEBUG_MSG("name is null\n");
 		return NULL;
 	}
@@ -70,25 +77,26 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 
 	buffer[0] = '/';
 	buffer[i = 1] = '\0';
-	
+
 	for (;;) {
-		if (IS_ROOT(dentry)) break;
-		
+		if (IS_ROOT(dentry))
+			break;
+
 		j = i + strlen(dentry->d_name.name);
-		if ((j + 1) >= bufsize) { /* reallocate - won't fit */
+		if ((j + 1) >= bufsize) {	/* reallocate - won't fit */
 			bufsize = (j + 1) + FN_CHUNK_SIZE;
 			tmpbuf = kmalloc(bufsize, GFP_KERNEL);
 			if (!tmpbuf) {
 				kfree(buffer);
-				TS_DEBUG_MSG("Out of memory allocating tmpbuf\n");
+				TS_DEBUG_MSG
+				    ("Out of memory allocating tmpbuf\n");
 				return NULL;
 			}
 			strcpy(tmpbuf, buffer);
 			kfree(buffer);
 			buffer = tmpbuf;
 		}
-
-		// Throw the name in there backward
+		/* Throw the name in there backward */
 		for (k = 0; dentry->d_name.name[k]; k++) {
 			buffer[j - 1 - k] = dentry->d_name.name[k];
 		}
@@ -97,34 +105,38 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d) {
 		buffer[i++] = '/';
 		dentry = dentry->d_parent;
 	}
-  	buffer[i]=0;
+	buffer[i] = 0;
 
-	// buffer is backwards, reverse it
+	/* buffer is backwards, reverse it */
 	for (j = 0; j < (i / 2); j++) {
 		c = buffer[j];
 		buffer[j] = buffer[i - j - 1];
 		buffer[i - j - 1] = c;
 	}
 
-	if (d) *d = depth;
-	
+	if (d)
+		*d = depth;
+
 	return buffer;
 }
 
-static inline void add_ic_dev(dev_t dev, char *devname) {
+static inline void add_ic_dev(dev_t dev, char *devname)
+{
 	char *devname2;
 	struct trustee_ic *ic;
 
 	devname2 = kmalloc(strlen(devname) + 1, GFP_KERNEL);
 	if (!devname2) {
-		TS_DEBUG_MSG("Seems that we have ran out of memory adding ic dev!");
+		TS_DEBUG_MSG
+		    ("Seems that we have ran out of memory adding ic dev!");
 		return;
 	}
 	strcpy(devname2, devname);
 
 	ic = kmalloc(sizeof(struct trustee_ic), GFP_KERNEL);
 	if (!ic) {
-		TS_DEBUG_MSG("Seems that we ran out of memory allocating ic!");
+		TS_DEBUG_MSG
+		    ("Seems that we ran out of memory allocating ic!");
 		return;
 	}
 
@@ -137,9 +149,10 @@ static inline void add_ic_dev(dev_t dev, char *devname) {
 	up_write(&trustee_ic_sem);
 }
 
-static inline void remove_ic_devs(void) {
+static inline void remove_ic_devs(void)
+{
 	struct trustee_ic *ic, *iter, *next;;
-	
+
 	down_write(&trustee_ic_sem);
 	ic = trustee_ic_list;
 	trustee_ic_list = NULL;
@@ -152,36 +165,42 @@ static inline void remove_ic_devs(void) {
 	}
 }
 
-static inline void free_hash_element_list(struct trustee_hash_element e) {
+static inline void free_hash_element_list(struct trustee_hash_element e)
+{
 	struct trustee_permission_capsule *l1, *l2;
 	l1 = e.list;
 	while (l1 != NULL) {
 		l2 = l1;
-		l1 = (void *)l1->next;
+		l1 = (void *) l1->next;
 		kfree(l2);
 	}
 	e.list = NULL;
 }
 
-static inline void free_trustee_name(struct trustee_name *name) {
+static inline void free_trustee_name(struct trustee_name *name)
+{
 	kfree(name->filename);
 	if (TRUSTEE_HASDEVNAME(*name)) {
 		kfree(name->devname);
 	}
-} 
+}
 
-static inline void free_hash_element(struct trustee_hash_element e) {
+static inline void free_hash_element(struct trustee_hash_element e)
+{
 	e.usage = 1;
 	free_hash_element_list(e);
 	free_trustee_name(&e.name);
 }
 
 
-/* hashing function researched by Karl Nelson <kenelson @ ece ucdavis edu> 
+/* hashing functiindent: Standard input:304: Warning:old style assignment ambiguity in "=*".  Assuming "= *"
+
+on researched by Karl Nelson <kenelson @ ece ucdavis edu> 
  * and is used in glib. */
-static inline unsigned int hash_string(const char *s) {
+static inline unsigned int hash_string(const char *s)
+{
 	unsigned int v = 0;
-	
+
 	while (*s) {
 		v = (v << 5) - v + *s;
 		s++;
@@ -190,9 +209,10 @@ static inline unsigned int hash_string(const char *s) {
 	return v;
 }
 
-static inline unsigned int hash(const struct trustee_name *name) {
+static inline unsigned int hash(const struct trustee_name *name)
+{
 	unsigned int v = hash_string(name->filename);
-	
+
 	if (TRUSTEE_HASDEVNAME(*name)) {
 		v ^= hash_string(name->devname);
 	} else {
@@ -200,37 +220,43 @@ static inline unsigned int hash(const struct trustee_name *name) {
 	}
 
 	return v;
-} 
+}
 
-static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1, char *devname2) {
+static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1,
+				  char *devname2)
+{
 	if ((MAJOR(dev1) == 0) && (MAJOR(dev2) == 0))
 		return (strcmp(devname1, devname2) == 0);
 	else if ((MAJOR(dev1) != 0) && (MAJOR(dev2) != 0))
 		return (dev1 == dev2);
 	return 0;
 }
-static inline int trustee_name_cmp(const struct trustee_name *n1, 
-                                   const struct trustee_name *n2) {
+static inline int trustee_name_cmp(const struct trustee_name *n1,
+				   const struct trustee_name *n2)
+{
 	if (trustee_dev_cmp(n1->dev, n2->dev, n1->devname, n2->devname))
 		return (strcmp(n1->filename, n2->filename) == 0);
 	return 0;
 }
 
-static struct trustee_hash_element *get_trustee_for_name(
-    const struct trustee_name *name) {
+static struct trustee_hash_element *get_trustee_for_name(const struct
+							 trustee_name
+							 *name)
+{
 
 	unsigned int i;
 
-	if (trustee_hash == NULL) return NULL;
+	if (trustee_hash == NULL)
+		return NULL;
 
 	down_read(&trustee_hash_sem);
 
-	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size) {
-		if (trustee_hash[i].usage == 1) continue;
+	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage;
+	     i = (i + 1) % trustee_hash_size) {
+		if (trustee_hash[i].usage == 1)
+			continue;
 		if (trustee_name_cmp(&trustee_hash[i].name, name)) {
 			up_read(&trustee_hash_sem);
-//			TS_DEBUG_MSG("Found a trustee element for %s\n",
-//			  name->filename);
 			return trustee_hash + i;
 		}
 	}
@@ -243,79 +269,96 @@ static struct trustee_hash_element *get_trustee_for_name(
 
 /* This function does not allocate memory for filename and devname. It should be allocated at calling level */
 static struct trustee_hash_element *getallocate_trustee_for_name
-   (const struct trustee_name  * name, int * should_free) {
-	struct trustee_hash_element  * r,*n;
-	unsigned int i,j,newsize;
+    (const struct trustee_name *name, int *should_free) {
+	struct trustee_hash_element *r, *n;
+	unsigned int i, j, newsize;
 
-	*should_free=1;
+	*should_free = 1;
 	r = get_trustee_for_name(name);
-	if (r!=NULL) return r;
+	if (r != NULL)
+		return r;
 
-	if (trustee_hash==NULL){
+	if (trustee_hash == NULL) {
 		TS_DEBUG_MSG("Building new trustee hash\n");
 
 		down_write(&trustee_hash_sem);
-		trustee_hash=kmalloc(sizeof(struct trustee_hash_element)*TRUSTEE_INITIAL_HASH_SIZE, GFP_KERNEL);
-		if (trustee_hash==NULL) {
+		trustee_hash =
+		    kmalloc(sizeof(struct trustee_hash_element) *
+			    TRUSTEE_INITIAL_HASH_SIZE, GFP_KERNEL);
+		if (trustee_hash == NULL) {
 
-			TS_DEBUG_MSG("Can not allocate memory for trustee hash\n");
+			TS_DEBUG_MSG
+			    ("Can not allocate memory for trustee hash\n");
 
 			up_write(&trustee_hash_sem);
 			return r;
 		}
-		trustee_hash_size=TRUSTEE_INITIAL_HASH_SIZE;
-		trustee_hash_used=0;
-		trustee_hash_deleted=0;
-		for (i=0;i<trustee_hash_size;i++) trustee_hash[i].usage=0;
+		trustee_hash_size = TRUSTEE_INITIAL_HASH_SIZE;
+		trustee_hash_used = 0;
+		trustee_hash_deleted = 0;
+		for (i = 0; i < trustee_hash_size; i++)
+			trustee_hash[i].usage = 0;
 		up_write(&trustee_hash_sem);
-	}
-	else if ((trustee_hash_size*3/4<trustee_hash_used) || (trustee_hash_size-2<trustee_hash_used)) { /*hash needed to be rebuilt, rebuilding hash */
+	} else if ((trustee_hash_size * 3 / 4 < trustee_hash_used) || (trustee_hash_size - 2 < trustee_hash_used)) {	/*hash needed to be rebuilt, rebuilding hash */
 		down_write(&trustee_hash_sem);
-		newsize=(trustee_hash_deleted*3)>trustee_hash_size?trustee_hash_size:trustee_hash_size*2;
+		newsize =
+		    (trustee_hash_deleted * 3) >
+		    trustee_hash_size ? trustee_hash_size :
+		    trustee_hash_size * 2;
 
-		TS_DEBUG_MSG("Rebuilding trustee hash, oldsize: %d, newsize %d, deleted %d\n",trustee_hash_size,newsize, trustee_hash_deleted);
+		TS_DEBUG_MSG
+		    ("Rebuilding trustee hash, oldsize: %d, newsize %d, deleted %d\n",
+		     trustee_hash_size, newsize, trustee_hash_deleted);
 
-		n=kmalloc(sizeof(struct trustee_hash_element)*newsize, GFP_KERNEL);
-		if (n==NULL) {
+		n = kmalloc(sizeof(struct trustee_hash_element) * newsize,
+			    GFP_KERNEL);
+		if (n == NULL) {
 
-			TS_DEBUG_MSG("Can not allocate memory for trustee hash\n");
+			TS_DEBUG_MSG
+			    ("Can not allocate memory for trustee hash\n");
 
 			up_write(&trustee_hash_sem);
 			return r;
 		}
-		for (i=0;i<newsize;i++) n[i].usage=0;
-		trustee_hash_used=0;
-		for (i=0;i<trustee_hash_size;i++) {
-			if (trustee_hash[i].usage==2) {
-				for (j=hash(&trustee_hash[i].name)%newsize;n[j].usage;j=(j+1)%newsize);
-				n[j]=trustee_hash[i];
+		for (i = 0; i < newsize; i++)
+			n[i].usage = 0;
+		trustee_hash_used = 0;
+		for (i = 0; i < trustee_hash_size; i++) {
+			if (trustee_hash[i].usage == 2) {
+				for (j =
+				     hash(&trustee_hash[i].name) % newsize;
+				     n[j].usage; j = (j + 1) % newsize);
+				n[j] = trustee_hash[i];
 				trustee_hash_used++;
 			}
 		}
 		kfree(trustee_hash);
-		trustee_hash=n;
-		trustee_hash_size=newsize;
-		trustee_hash_deleted=0;
+		trustee_hash = n;
+		trustee_hash_size = newsize;
+		trustee_hash_deleted = 0;
 		up_write(&trustee_hash_sem);
 	}
 	down_read(&trustee_hash_sem);
 
-	for (j=hash(name)%trustee_hash_size;trustee_hash[j].usage==2;j=(j+1)%trustee_hash_size);
-	trustee_hash[j].name=*name;
-	*should_free=0;
-	r=trustee_hash+j;
-	r->list=NULL;
-	r->usage=2;
+	for (j = hash(name) % trustee_hash_size;
+	     trustee_hash[j].usage == 2; j = (j + 1) % trustee_hash_size);
+	trustee_hash[j].name = *name;
+	*should_free = 0;
+	r = trustee_hash + j;
+	r->list = NULL;
+	r->usage = 2;
 
-	TS_DEBUG_MSG("Added element to trustee hash: j %d, name : %s\n",j,r->name.filename);
+	TS_DEBUG_MSG("Added element to trustee hash: j %d, name : %s\n", j,
+		     r->name.filename);
 
 	trustee_hash_used++;
 	up_read(&trustee_hash_sem);
-	
+
 	return r;
 }
-
-static int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int height) {
+static int get_trustee_mask_for_name(struct trustee_name *name,
+				     int oldmask, int height)
+{
 	struct trustee_hash_element *e;
 	int m;
 	struct trustee_permission_capsule *l;
@@ -324,39 +367,47 @@ static int get_trustee_mask_for_name(struct trustee_name *name, int oldmask, int
 	if (!e) {
 		return oldmask;
 	}
-	for (l = e->list; l != NULL; l = (void*)l->next) {
-		if ((height < 0) && (l->permission.mask & TRUSTEE_ONE_LEVEL_MASK)) 
+	for (l = e->list; l != NULL; l = (void *) l->next) {
+		if ((height < 0)
+		    && (l->permission.mask & TRUSTEE_ONE_LEVEL_MASK))
 			continue;
-		appl=((!(l->permission.mask & TRUSTEE_IS_GROUP_MASK)) && (current->fsuid==l->permission.u.uid)) 
-		    ||
-		    (((l->permission.mask & TRUSTEE_IS_GROUP_MASK)) && (in_group_p(l->permission.u.gid)))
-		    ||
-		    (l->permission.mask & TRUSTEE_ALL_MASK);
-		if (l->permission.mask & TRUSTEE_NOT_MASK) appl = !appl;
+		appl = ((!(l->permission.mask & TRUSTEE_IS_GROUP_MASK))
+			&& (current->fsuid == l->permission.u.uid))
+		    || (((l->permission.mask & TRUSTEE_IS_GROUP_MASK))
+			&& (in_group_p(l->permission.u.gid)))
+		    || (l->permission.mask & TRUSTEE_ALL_MASK);
+		if (l->permission.mask & TRUSTEE_NOT_MASK)
+			appl = !appl;
 
-		if (!appl) 
+		if (!appl)
 			continue;
 
 		m = l->permission.mask & TRUSTEE_ACL_MASK;
 
-		if (l->permission.mask & TRUSTEE_ALLOW_DENY_MASK) m <<= TRUSTEE_NUM_ACL_BITS;
+		if (l->permission.mask & TRUSTEE_ALLOW_DENY_MASK)
+			m <<= TRUSTEE_NUM_ACL_BITS;
 
-		oldmask = l->permission.mask & TRUSTEE_CLEAR_SET_MASK ? (oldmask & (~m)) : (oldmask | m);
+		oldmask =
+		    l->permission.
+		    mask & TRUSTEE_CLEAR_SET_MASK ? (oldmask & (~m))
+		    : (oldmask | m);
 	}
 
 	return oldmask;
 }
 
-static inline void str_to_lower(char *string) {
+static inline void str_to_lower(char *string)
+{
 	for (; *string; string++) {
-		if ((*string >= 'A') && (*string <= 'Z')) (*string) += 'a' - 'A';
+		if ((*string >= 'A') && (*string <= 'Z'))
+			(*string) += 'a' - 'A';
 	}
 }
-	
 
-int trustee_perm(
-  struct dentry *dentry, struct vfsmount *mnt,
-  char *file_name, int unix_ret, int depth, int is_dir) {
+
+int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
+		 char *file_name, int unix_ret, int depth, int is_dir)
+{
 	int oldmask = trustee_default_acl;
 	int height = 0;
 	char *filecount;
@@ -369,8 +420,10 @@ int trustee_perm(
 	trustee_name.filename = file_name;
 
 	down_read(&trustee_ic_sem);
-	for (iter = trustee_ic_list; (iter); iter=iter->next) {
-		if (trustee_dev_cmp(iter->dev, trustee_name.dev, iter->devname, trustee_name.devname)) {
+	for (iter = trustee_ic_list; (iter); iter = iter->next) {
+		if (trustee_dev_cmp
+		    (iter->dev, trustee_name.dev, iter->devname,
+		     trustee_name.devname)) {
 			str_to_lower(file_name);
 			break;
 		}
@@ -381,144 +434,268 @@ int trustee_perm(
 	for (;;) {
 		c = *filecount;
 		*filecount = 0;
-		oldmask = 
-		   get_trustee_mask_for_name(&trustee_name, oldmask, height - depth + !is_dir);
+		oldmask =
+		    get_trustee_mask_for_name(&trustee_name, oldmask,
+					      height - depth + !is_dir);
 		height++;
 		*filecount = c;
-		for (filecount++;  *filecount && (*filecount != '/'); *filecount++);
-		if (!*filecount) break;
+		for (filecount++; *filecount && (*filecount != '/');
+		     *filecount++);
+		if (!*filecount)
+			break;
 	}
 
 	return oldmask;
 }
-	
-static int prepare_trustee_name(const struct trustee_command * c, struct trustee_name * name) {
-	 name->dev=c->dev;
-	 name->filename=kmalloc((strlen(c->filename)+1)*sizeof(char),GFP_KERNEL);
-		if (!name->filename) {
-			TS_DEBUG_MSG("No memory to allocate for temporary name buffer");
-			return 0;
-		}
-	 copy_from_user(name->filename,c->filename,(strlen(c->filename)+1)*sizeof(char));
-		
-	 if (TRUSTEE_HASDEVNAME(*name)) {
-		 name->devname=kmalloc((strlen(c->devname)+1)*sizeof(char),GFP_KERNEL);
-		 if (!name->devname) {
-			TS_DEBUG_MSG("No memory to allocate for temporary device buffer");
+
+static int prepare_trustee_name(const struct trustee_command *c,
+				struct trustee_name *name)
+{
+	name->dev = c->dev;
+	name->filename =
+	    kmalloc((strlen(c->filename) + 1) * sizeof(char), GFP_KERNEL);
+	if (!name->filename) {
+		TS_DEBUG_MSG
+		    ("No memory to allocate for temporary name buffer");
+		return 0;
+	}
+	copy_from_user(name->filename, c->filename,
+		       (strlen(c->filename) + 1) * sizeof(char));
+
+	if (TRUSTEE_HASDEVNAME(*name)) {
+		name->devname =
+		    kmalloc((strlen(c->devname) + 1) * sizeof(char),
+			    GFP_KERNEL);
+		if (!name->devname) {
+			TS_DEBUG_MSG
+			    ("No memory to allocate for temporary device buffer");
 			kfree(name->filename);
 
 			return 0;
 		}
-		copy_from_user(name->devname,c->devname,(strlen(c->devname)+1)*sizeof(char)); 
-	 }
-	 return 1;
+		copy_from_user(name->devname, c->devname,
+			       (strlen(c->devname) + 1) * sizeof(char));
+	}
+	return 1;
 }
 
 /* Clear out the hash of trustees and release the hash itself.
+ * Also gets rid of the ignore-case list
  */
-void trustees_clear_all(void) {
+static void trustees_clear_all(void)
+{
 	int i;
-	if (!trustee_hash) 
+	if (!trustee_hash)
 		return;
 	down_write(&trustee_hash_sem);
 	for (i = 0; i < trustee_hash_size; i++) {
-		if (trustee_hash[i].usage == 2) 
+		if (trustee_hash[i].usage == 2)
 			free_hash_element(trustee_hash[i]);
 	}
 	kfree(trustee_hash);
 	trustee_hash = NULL;
 	up_write(&trustee_hash_sem);
+
+	remove_ic_devs();
 }
 
-int trustees_process_command(const struct trustee_command * command) {
+int trustees_funcs_init_globals(void)
+{
+	trustees_clear_all();
+
+	if (!devb) {
+		devb = kmalloc(PATH_MAX + 4, GFP_KERNEL);
+	}
+
+	if (!devb) {
+		printk("Couldn't allocate memory for devb!\n");
+		return -1;
+	}
+
+	if (!fileb) {
+		fileb = kmalloc(PATH_MAX + 4, GFP_KERNEL);
+	}
+
+	if (!fileb) {
+		kfree(devb);
+		devb = NULL;
+		printk("Couldn't allocate memory for fileb!\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int trustees_funcs_cleanup_globals(void)
+{
+	trustees_clear_all();
+
+	spin_lock(&charbuf_lock);
+
+	if (fileb) {
+		kfree(fileb);
+		fileb = NULL;
+	}
+	if (devb) {
+		kfree(devb);
+		devb = NULL;
+	}
+
+	spin_unlock(&charbuf_lock);
+
+	return 0;
+}
+
+/* Should be called with charbuf_lock locked
+ */
+static int sanitize_command(struct trustee_command *command,
+			    const struct trustee_command __user * command2)
+{
+	long devl, filel;
+
+	if ((!command) || (!command2))
+		return -1;
+
+	copy_from_user(command, command2, sizeof(struct trustee_command));
+
+	filel = strnlen_user(command->filename, PATH_MAX);
+	devl = strnlen_user(command->devname, PATH_MAX);
+
+	if (unlikely(!devb)) {
+		printk(KERN_CRIT "Trustees: devb not initialized!\n");
+		return -4;
+	}
+	if (unlikely(!fileb)) {
+		printk(KERN_CRIT "Trustees: fileb not initialized!\n");
+		return -5;
+	}
+
+	if (!devl || (devl > PATH_MAX)) {
+		TS_DEBUG_MSG("device name bad, command ignored.\n");
+		return -2;
+	}
+	if (!filel || (filel > PATH_MAX)) {
+		TS_DEBUG_MSG("file name bad, command ignored.\n");
+		return -3;
+	}
+
+	if (strncpy_from_user(devb, command->devname, PATH_MAX) < 0) {
+		TS_DEBUG_MSG("garbled c.devname\n");
+		return -5;
+	}
+	if (strncpy_from_user(fileb, command->filename, PATH_MAX) < 0) {
+		TS_DEBUG_MSG("garbled c.devname\n");
+		return -6;
+	}
+
+	command->devname = devb;
+	command->filename = fileb;
+
+	command->dev = new_decode_dev((u32) command->dev);
+
+	return 0;
+}
+
+int trustees_process_command(const struct trustee_command __user * command)
+{
 	int r = -ENOSYS;
 	struct trustee_name name;
 	struct trustee_hash_element *e;
 	struct trustee_permission_capsule *capsule;
 	int should_free;
 	struct trustee_command c;
-	copy_from_user(&c,command,sizeof(c));
 
-	c.dev = new_decode_dev((u32)c.dev);
+	spin_lock(&charbuf_lock);
+
+	sanitize_command(&c, command);
+
 	TS_DEBUG_MSG("set trustee called, command %d\n", c.command);
 
-	if ((current->euid!=0) && !capable(CAP_SYS_ADMIN)) return -EACCES;
+	if ((current->euid != 0) && !capable(CAP_SYS_ADMIN)) {
+		r = -EACCES;
+		goto unlk;
+	}
 	switch (c.command) {
-	case TRUSTEE_COMMAND_MAKE_IC :
+	case TRUSTEE_COMMAND_MAKE_IC:
 		r = 0;
 		add_ic_dev(c.dev, c.devname);
 		goto unlk;
-	case TRUSTEE_COMMAND_REMOVE_ALL :
+	case TRUSTEE_COMMAND_REMOVE_ALL:
 		r = 0;
 		trustees_clear_all();
 		goto unlk;
 	case TRUSTEE_COMMAND_REMOVE:
-		if (!prepare_trustee_name(&c,&name)) {
-		  r=-ENOMEM;
-		  goto unlk;
+		if (!prepare_trustee_name(&c, &name)) {
+			r = -ENOMEM;
+			goto unlk;
 		}
-		e=get_trustee_for_name(&name);
-		if (e==NULL) {
-			r=-ENOENT;
+		e = get_trustee_for_name(&name);
+		if (e == NULL) {
+			r = -ENOENT;
 			free_trustee_name(&name);
 			goto unlk;
 		}
 		free_hash_element(*e);
 		trustee_hash_deleted++;
 		free_trustee_name(&name);
-		r=0;
+		r = 0;
 		goto unlk;
 	case TRUSTEE_COMMAND_REPLACE:
-		if (!prepare_trustee_name(&c,&name)) {
-		  r=-ENOMEM;
-		  goto unlk;
+		if (!prepare_trustee_name(&c, &name)) {
+			r = -ENOMEM;
+			goto unlk;
 		}
-			
-		e=getallocate_trustee_for_name(&name,&should_free);
-		if (e==NULL) {
-			r=-ENOMEM;
-			if (should_free) free_trustee_name(&name);
+
+		e = getallocate_trustee_for_name(&name, &should_free);
+		if (e == NULL) {
+			r = -ENOMEM;
+			if (should_free)
+				free_trustee_name(&name);
 			goto unlk;
 		}
 		free_hash_element_list(*e);
-		capsule=kmalloc(sizeof(struct trustee_permission_capsule),GFP_KERNEL);
-		capsule->permission=c.permission;
-		capsule->next=(void*)e->list;
+		capsule =
+		    kmalloc(sizeof(struct trustee_permission_capsule),
+			    GFP_KERNEL);
+		capsule->permission = c.permission;
+		capsule->next = (void *) e->list;
 		e->list = capsule;
-		r=0;
-		if (should_free) free_trustee_name(&name);
-		     
+		r = 0;
+		if (should_free)
+			free_trustee_name(&name);
+
 		goto unlk;
-		
+
 	case TRUSTEE_COMMAND_ADD:
-		if (!prepare_trustee_name(&c,&name)) {
-		  r=-ENOMEM;
-		  goto unlk;
-		}
-		e=getallocate_trustee_for_name(&name,&should_free);
-		if (e==NULL) {
-			r=-ENOMEM;
-			if (should_free) free_trustee_name(&name);
+		if (!prepare_trustee_name(&c, &name)) {
+			r = -ENOMEM;
 			goto unlk;
 		}
-		
-		capsule=kmalloc(sizeof(struct trustee_permission_capsule),GFP_KERNEL);
-		capsule->permission=c.permission;
-		capsule->next=(void*)e->list;
-		e->list=capsule;
-		r=0;
-		if (should_free) free_trustee_name(&name);
+		e = getallocate_trustee_for_name(&name, &should_free);
+		if (e == NULL) {
+			r = -ENOMEM;
+			if (should_free)
+				free_trustee_name(&name);
+			goto unlk;
+		}
+
+		capsule =
+		    kmalloc(sizeof(struct trustee_permission_capsule),
+			    GFP_KERNEL);
+		capsule->permission = c.permission;
+		capsule->next = (void *) e->list;
+		e->list = capsule;
+		r = 0;
+		if (should_free)
+			free_trustee_name(&name);
 		goto unlk;
-		
-		
-	}	
- unlk:
+
+
+	}
+      unlk:
+
+	spin_unlock(&charbuf_lock);
 
 	TS_DEBUG_MSG("Returning %d from set trustee func\n", r);
 	return r;
 }
-
-
-
-
-
