@@ -1,5 +1,5 @@
 ifneq ($(KERNELRELEASE),)
-EXTRA_CFLAGS += -I$(PWD)/../include -DTRUSTEES_DEBUG
+EXTRA_CFLAGS += -I$(PWD)/../include -DTRUSTEES_DEBUG -g
 obj-m := trustees.o
 trustees-objs := security.o fs.o init.o funcs.o
 

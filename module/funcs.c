@@ -47,7 +47,7 @@ static int trustee_hash_size = 0, trustee_hash_used =
 rwlock_t trustee_ic_lock = RW_LOCK_UNLOCKED;
 static struct trustee_ic *trustee_ic_list = NULL;
 
-#define FN_CHUNK_SIZE 50
+#define FN_CHUNK_SIZE 64
 
 /* The calling method needs to free the buffer created by this function
  * This method returns the filename for a dentry.  This is, of course, 
@@ -85,8 +85,8 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 			break;
 
 		j = i + strlen(dentry->d_name.name);
-		if ((j + 1) >= bufsize) {	/* reallocate - won't fit */
-			bufsize = (j + 1) + FN_CHUNK_SIZE;
+		if ((j + 2) > bufsize) {	/* reallocate - won't fit */
+			bufsize = (((j + 2) % FN_CHUNK_SIZE) + 2) * FN_CHUNK_SIZE;
 			tmpbuf = kmalloc(bufsize, GFP_KERNEL);
 			if (!tmpbuf) {
 				kfree(buffer);
@@ -103,14 +103,14 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 			buffer[j - 1 - k] = dentry->d_name.name[k];
 		}
 		i = j;
-		depth++;
+		++depth;
 		buffer[i++] = '/';
 		dentry = dentry->d_parent;
 	}
 	buffer[i] = 0;
 
 	/* buffer is backwards, reverse it */
-	for (j = 0; j < (i / 2); j++) {
+	for (j = 0; j < (i / 2); ++j) {
 		c = buffer[j];
 		buffer[j] = buffer[i - j - 1];
 		buffer[i - j - 1] = c;
@@ -422,7 +422,7 @@ static int get_trustee_mask_for_name(struct trustee_name *name,
 
 static inline void str_to_lower(char *string)
 {
-	for (; *string; string++) {
+	for (; *string; ++string) {
 		if ((*string >= 'A') && (*string <= 'Z'))
 			(*string) += 'a' - 'A';
 	}
@@ -455,7 +455,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	read_unlock(&trustee_ic_lock);
 
 	filecount = file_name + 1;
-	for (;;) {
+	while(*filecount) {
 		c = *filecount;
 		*filecount = 0;
 		oldmask =
@@ -465,8 +465,6 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 		*filecount = c;
 		for (filecount++; *filecount && (*filecount != '/');
 		     *filecount++);
-		if (!*filecount)
-			break;
 	}
 
 	return oldmask;
@@ -531,7 +529,7 @@ static int prepare_trustee_name(const struct trustee_command *command,
 	}
 
 	if (devl) {
-		devb = kmalloc(devl * sizeof(char), GFP_KERNEL);
+		devb = kmalloc(devl, GFP_KERNEL);
 		if (!devb) {
 			TS_DEBUG_MSG("Couldn't allocate mem for devb.\n");
 			return 0;
