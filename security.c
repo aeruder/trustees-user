@@ -35,46 +35,80 @@ struct security_operations trustees_security_ops = {
 	.inode_permission = trustees_inode_permission
 };
 
-static inline struct nameidata *find_nameidata(struct inode *inode, struct nameidata *nd) {
-	struct namespace *namespace;
+static inline struct vfsmount *find_inode_mnt(
+   struct inode *inode, struct nameidata *nd) {
+	struct namespace *ns;
+	struct vfsmount *mnt = NULL;
 	
-	if (likely(nd)) return nd;
+	if (likely(nd)) return mntget(nd->mnt);
 
-	namespace = current->namespace;
-	get_namespace(namespace);
+	// Okay, we need to find the vfsmount by looking
+	// at the namespace now.
+	
+	task_lock(current);
+	spin_lock(&vfsmount_lock);
+	
+	// debug
+	if (unlikely(!current->namespace)) goto out_wo_ns;
+	ns = current->namespace;
+	down_read(&ns->sem);
 
-	if (unlikely(!namespace)) {
-		printk(KERN_ERR "namespace is NULL!");
-		return NULL;
+	list_for_each_entry(mnt, &ns->list, mnt_list) {
+		if (mnt->mnt_sb == inode->i_sb) {
+			mntget(mnt);
+			goto out;
+		}
 	}
+
+out:
+	up_read(&ns->sem);
+out_wo_ns: 	
+	spin_unlock(&vfsmount_lock);
+	task_unlock(current);
+
+	return mnt;
+}
+
+static inline struct dentry *find_inode_dentry(
+   struct inode *inode, struct nameidata *nd) {
+	struct dentry *dentry;
+
+	if (likely(nd)) return dget(nd->dentry);
+
+	dentry = d_find_alias(inode);
+	if (dentry) dget(dentry);
+
+	return dentry;
 }
 	
 static int trustees_inode_permission(struct inode *inode, 
     int mask, struct nameidata *nd) {
-
-	umode_t mode = inode->i_mode;
-	const char *device_name = NULL;
-	char *file_name;
-	int c = 0;
 	struct dentry *dentry;
+	struct vfsmount *mnt;
+	char *file_name;
 	
-	if (!inode) {
+	// debug
+	if (unlikely(!inode)) {
 		printk(KERN_INFO "Inode was 0!\n" );
 		return 0;
 	}
-	if (list_empty(&inode->i_dentry)) {
-		printk(KERN_INFO "dentry list was empty!\n");
+
+	mnt = find_inode_mnt(inode, nd);
+	if (!mnt) {
+		printk(KERN_ERR "Error: inode does not have a mnt!");
 		return 0;
 	}
-	if (!nd || !nd->mnt) {
-		dentry = d_find_alias(inode);
-		if (dentry) {
-			file_name = trustees_filename_for_dentry(dentry);
-			printk(KERN_INFO "TRUSTEES %s has an nd of %d\n", file_name, (int)nd);
-		}
-		dput(dentry);
-		device_name = nd->mnt->mnt_devname;
+		
+	dentry = find_inode_dentry(inode, nd);
+	if (!dentry) {
+		printk(KERN_ERR "Error: dentry no existy!");
+		mntput(mnt);
+		return 0;
 	}
+	
+	file_name = trustees_filename_for_dentry(dentry);
+
+	printk(KERN_INFO "TRUSTEES %s on %s\n", file_name, mnt->mnt_devname);
 	
 /*
 	is_dir = indoe is directory
@@ -109,43 +143,6 @@ static int trustees_capable(struct task_struct *tsk, int cap)
 		return 0;
 
 	return -EPERM;
-}
-
-
-// This should be called with sb_lock locked
-int initialize_superblocks(void) {
-	struct super_block *sb;
-	struct trustee_name *name;
-
-	list_for_each_entry(sb, super_blocks, s_list) {
-		if (sb->s_security) {
-			printk (KERN_ERR "Superblock already has s_security");
-			continue;
-		}
-			
-		name = kmalloc(sizeof(struct trustee_name));
-		if (!name) {
-			printk (KERN_ERR "Out of memory allocating s_security");
-			continue;
-		}
-	}
-
-		
-		
-
-	
-	struct namespace *namespace;
-	
-	if (likely(nd)) return nd;
-
-	namespace = current->namespace;
-	get_namespace(namespace);
-
-	if (unlikely(!namespace)) {
-		printk(KERN_ERR "namespace is NULL!");
-		return NULL;
-	}
-
 }
 
 int trustees_init_security(void)
