@@ -26,6 +26,7 @@
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Trustees ACL System");
 MODULE_AUTHOR("Vyacheslav Zavadsky and Andrew E. Ruder <aeruder@ksu.edu>");
+MODULE_VERSION("2.11");
 
 static int __init trustees_init(void)
 {
