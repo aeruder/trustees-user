@@ -38,7 +38,6 @@ struct trustee_name {
   char * devname; /* ONLY if MAJOR(dev)==0 */
       
 
-
 };
 
 
@@ -48,7 +47,7 @@ extern int get_trustee_mask_for_dentry(struct dentry * dentry,uid_t user);
 
 #define TRUSTEE_INITIAL_HASH_SIZE 4
 #define TRUSTEE_INITIAL_NAME_BUFFER 256
-#define TRUSTEE_HASDEVNAME(TNAME)  (major(to_kdev_t((TNAME).dev))==0)
+#define TRUSTEE_HASDEVNAME(TNAME) ((MAJOR((TNAME).dev))==0)
 
 
 /* name & permission are ignored if command=TRUSTEE_COMMAND_REMOVE_ALL */ 

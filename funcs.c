@@ -54,7 +54,7 @@ static inline void free_hash_element_list(struct trustee_hash_element  e) {
 
 
 static inline void free_trustee_name(struct trustee_name * name) {
-        kfree(name->filename);
+	kfree(name->filename);
 	if (TRUSTEE_HASDEVNAME(*name)) {
 	  kfree(name->devname);
 	}
@@ -73,7 +73,7 @@ static inline void free_hash_element(struct trustee_hash_element  e) {
 
 static inline unsigned int hash_string(const char * s) {
 	unsigned int v=1;
-        while (*s) {
+	while (*s) {
  
 		v = (v << 2) | (v >> (4*sizeof(v)-2));
 		v = (v+(*s))^(*s);
@@ -84,11 +84,11 @@ static inline unsigned int hash_string(const char * s) {
 }
 
 static inline unsigned int hash(const struct trustee_name * name ) {
-         unsigned int v=hash_string(name->filename);
+	 unsigned int v=hash_string(name->filename);
 	 if (TRUSTEE_HASDEVNAME(*name)) {
-  	       v^=hash_string(name->devname);
+	       v^=hash_string(name->devname);
 	 } else {
-	   v^= kdev_val(to_kdev_t(name->dev));
+	   v^= new_encode_dev(name->dev);
 	 }
 
 	 return v;
@@ -98,7 +98,7 @@ static inline int trustee_name_cmp(const struct  trustee_name * n1, const struct
        if (TRUSTEE_HASDEVNAME(*n1) && TRUSTEE_HASDEVNAME(*n2)) 
 	 return (strcmp(n1->devname,n2->devname)==0) &&  (strcmp(n1->filename,n2->filename)==0);
        else  if ((!TRUSTEE_HASDEVNAME(*n1)) && (!TRUSTEE_HASDEVNAME(*n2))) 
-	 return (( kdev_val (to_kdev_t(n1->dev))== kdev_val(to_kdev_t(n2->dev))) && (strcmp(n1->filename,n2->filename)==0));
+	 return ((new_encode_dev(n1->dev)==new_encode_dev(n2->dev)) && (strcmp(n1->filename,n2->filename)==0));
        return 0;
 
 }
@@ -170,8 +170,8 @@ static struct trustee_hash_element  * getallocate_trustee_for_name(const struct 
 			}
 		}
 		kfree(trustee_hash);
-                trustee_hash=n;
-                trustee_hash_size=newsize;
+		trustee_hash=n;
+		trustee_hash_size=newsize;
 		trustee_hash_deleted=0;
 				
 		
@@ -274,8 +274,8 @@ int get_trustee_mask_for_dentry(struct dentry * dentry,uid_t user) {
       while  (j+1>=bufsize) bufsize*=2;
       buf2=kmalloc(bufsize,GFP_KERNEL);
       if (!buf2) {
-        kfree(namebuffer);
-        return trustee_default_acl;
+	kfree(namebuffer);
+	return trustee_default_acl;
       }
       strcpy(buf2,namebuffer);
       kfree(namebuffer);
@@ -326,7 +326,7 @@ int get_trustee_mask_for_dentry(struct dentry * dentry,uid_t user) {
 				 
 
 static int prepare_trustee_name(const struct trustee_command * c, struct trustee_name * name) {
-         name->dev=c->dev;
+	 name->dev=c->dev;
 	 name->filename=kmalloc((strlen(c->filename)+1)*sizeof(char),GFP_KERNEL);
 		if (!name->filename) {
 			printk("No memory to allocate for temporary name buffer");
@@ -335,8 +335,8 @@ static int prepare_trustee_name(const struct trustee_command * c, struct trustee
 	 copy_from_user(name->filename,c->filename,(strlen(c->filename)+1)*sizeof(char));
 		
 	 if (TRUSTEE_HASDEVNAME(*name)) {
-	         name->devname=kmalloc((strlen(c->devname)+1)*sizeof(char),GFP_KERNEL);
-                 if (!name->devname) {
+		 name->devname=kmalloc((strlen(c->devname)+1)*sizeof(char),GFP_KERNEL);
+		 if (!name->devname) {
 			printk("No memory to allocate for temporary device buffer");
 			kfree(name->filename);
 
@@ -352,7 +352,7 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 	struct trustee_hash_element * e;
 	struct permission_capsule * capsule;
 	int should_free;
-        struct trustee_command c;
+	struct trustee_command c;
 	copy_from_user(&c,command,sizeof(c));
 #ifdef TRUSTEE_DEBUG
 	printk("set trustee called, command %d", c.command);
@@ -370,7 +370,7 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 		trustee_hash=NULL;
 		goto unlk;
 	case TRUSTEE_COMMAND_REMOVE:
-	        if (!prepare_trustee_name(&c,&name)) {
+		if (!prepare_trustee_name(&c,&name)) {
 		  r=-ENOMEM;
 		  goto unlk;
 		}
@@ -391,11 +391,11 @@ asmlinkage int sys_set_trustee(const struct trustee_command * command) {
 		  goto unlk;
 		}
 			
-                e=getallocate_trustee_for_name(&name,&should_free);
+		e=getallocate_trustee_for_name(&name,&should_free);
 		if (e==NULL) {
 			r=-ENOMEM;
 			if (should_free) free_trustee_name(&name);
-		        goto unlk;
+			goto unlk;
 		}
 		free_hash_element_list(*e);
 		capsule=kmalloc(sizeof(struct permission_capsule),GFP_KERNEL);
