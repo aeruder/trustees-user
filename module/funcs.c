@@ -459,23 +459,20 @@ static int prepare_trustee_name(const struct trustee_command *c,
 		    ("No memory to allocate for temporary name buffer");
 		return 0;
 	}
-	copy_from_user(name->filename, c->filename,
-		       (strlen(c->filename) + 1) * sizeof(char));
+	strcpy(name->filename, c->filename);
 
-	if (TRUSTEE_HASDEVNAME(*name)) {
-		name->devname =
-		    kmalloc((strlen(c->devname) + 1) * sizeof(char),
-			    GFP_KERNEL);
-		if (!name->devname) {
-			TS_DEBUG_MSG
-			    ("No memory to allocate for temporary device buffer");
-			kfree(name->filename);
+	name->devname =
+		kmalloc((strlen(c->devname) + 1) * sizeof(char),
+			GFP_KERNEL);
+	if (!name->devname) {
+		TS_DEBUG_MSG
+			("No memory to allocate for temporary device buffer");
+		kfree(name->filename);
 
-			return 0;
-		}
-		copy_from_user(name->devname, c->devname,
-			       (strlen(c->devname) + 1) * sizeof(char));
+		return 0;
 	}
+	strcpy(name->devname, c->devname);
+
 	return 1;
 }
 
@@ -504,7 +501,7 @@ int trustees_funcs_init_globals(void)
 	trustees_clear_all();
 
 	if (!devb) {
-		devb = kmalloc(PATH_MAX + 4, GFP_KERNEL);
+		devb = kmalloc((PATH_MAX + 4) * sizeof(char), GFP_KERNEL);
 	}
 
 	if (!devb) {
@@ -513,7 +510,7 @@ int trustees_funcs_init_globals(void)
 	}
 
 	if (!fileb) {
-		fileb = kmalloc(PATH_MAX + 4, GFP_KERNEL);
+		fileb = kmalloc((PATH_MAX + 4) * sizeof(char), GFP_KERNEL);
 	}
 
 	if (!fileb) {
@@ -558,8 +555,13 @@ static int sanitize_command(struct trustee_command *command,
 
 	copy_from_user(command, command2, sizeof(struct trustee_command));
 
-	filel = strnlen_user(command->filename, PATH_MAX);
-	devl = strnlen_user(command->devname, PATH_MAX);
+	filel = 0;
+	if (command->filename)
+		filel = strnlen_user(command->filename, PATH_MAX);
+	
+	devl = 0;
+	if (command->devname)
+		devl = strnlen_user(command->devname, PATH_MAX);
 
 	if (unlikely(!devb)) {
 		printk(KERN_CRIT "Trustees: devb not initialized!\n");
