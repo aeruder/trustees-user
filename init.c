@@ -38,8 +38,6 @@ static int __init trustees_init(void)
 		return -EINVAL;
 	}
 	
-	struct rw_semaphore *trustees_hash_lock __cacheline_aligned_in_smp = NULL;
-
 #ifdef TRUSTEES_DEBUG
 	printk(KERN_ALERT "Hello world\n");
 #endif

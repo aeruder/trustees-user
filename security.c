@@ -24,8 +24,7 @@
 
 static int trustees_capable(struct task_struct *tsk, int cap);
 static int trustees_inode_permission(struct inode *inode, 
-    int mask, struct nameidata *nd);
-static int trustees_has_unix_perm(struct inode *inode, mask);
+  int mask, struct nameidata *nd);
 
 
 /* Structure where we fill in the various hooks we are implementing in this module
@@ -56,6 +55,7 @@ static int trustees_inode_permission(struct inode *inode,
 		device_name = nd->mnt->mnt_devname;
 	}
 	
+/*
 	is_dir = indoe is directory
 	find_alias dentry
 	get_filename
@@ -72,6 +72,7 @@ static int trustees_inode_permission(struct inode *inode,
 		c++;
 	}
 
+	*/
 	return 0;
 }
 	
