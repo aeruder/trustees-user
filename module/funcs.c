@@ -40,6 +40,7 @@ static int trustee_s_hash_size = 0, trustee_s_hash_used = 0,
  * hold the actual permissions for that device/filename.
  */
 rwlock_t trustee_hash_lock = RW_LOCK_UNLOCKED;
+DECLARE_MUTEX(trustee_rebuild_hash_sem);
 static struct trustee_hash_element *trustee_hash = NULL;
 static int trustee_hash_size = 0, trustee_hash_used =
     0, trustee_hash_deleted = 0;
@@ -305,26 +306,28 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	if (trustee_hash == NULL) {
 		TS_DEBUG_MSG("Building new trustee hash\n");
 
-		write_lock(&trustee_hash_lock);
-		trustee_hash =
-		    kmalloc(sizeof(struct trustee_hash_element) *
-			    TRUSTEE_INITIAL_HASH_SIZE, GFP_KERNEL);
-		if (trustee_hash == NULL) {
+		down(&trustee_rebuild_hash_sem);
+		n = kmalloc(sizeof(struct trustee_hash_element) *
+		       TRUSTEE_INITIAL_HASH_SIZE, GFP_KERNEL);
+		if (n == NULL) {
 
 			TS_DEBUG_MSG
 			    ("Can not allocate memory for trustee hash\n");
 
-			write_unlock(&trustee_hash_lock);
+			up(&trustee_rebuild_hash_sem);
 			return r;
 		}
+		write_lock(&trustee_hash_lock);
+		trustee_hash = n;
 		trustee_hash_size = TRUSTEE_INITIAL_HASH_SIZE;
 		trustee_hash_used = 0;
 		trustee_hash_deleted = 0;
 		for (i = 0; i < trustee_hash_size; i++)
 			trustee_hash[i].usage = 0;
 		write_unlock(&trustee_hash_lock);
+		up(&trustee_rebuild_hash_sem);
 	} else if ((trustee_hash_size * 3 / 4 < trustee_hash_used) || (trustee_hash_size - 2 < trustee_hash_used)) {	/*hash needed to be rebuilt, rebuilding hash */
-		write_lock(&trustee_hash_lock);
+		down(&trustee_rebuild_hash_sem);
 		newsize =
 		    (trustee_hash_deleted * 3) >
 		    trustee_hash_size ? trustee_hash_size :
@@ -340,12 +343,12 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 
 			TS_DEBUG_MSG
 			    ("Can not allocate memory for trustee hash\n");
-
-			write_unlock(&trustee_hash_lock);
+			up(&trustee_rebuild_hash_sem);
 			return r;
 		}
 		for (i = 0; i < newsize; i++)
 			n[i].usage = 0;
+		write_lock(&trustee_hash_lock);
 		trustee_hash_used = 0;
 		for (i = 0; i < trustee_hash_size; i++) {
 			if (trustee_hash[i].usage == 2) {
@@ -361,9 +364,10 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_size = newsize;
 		trustee_hash_deleted = 0;
 		write_unlock(&trustee_hash_lock);
+		up(&trustee_rebuild_hash_sem);
 	}
-	read_lock(&trustee_hash_lock);
 
+	write_lock(&trustee_hash_lock);
 	for (j = hash(name) % trustee_hash_size;
 	     trustee_hash[j].usage == 2; j = (j + 1) % trustee_hash_size);
 	trustee_hash[j].name = *name;
@@ -376,7 +380,8 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		     r->name.filename);
 
 	trustee_hash_used++;
-	read_unlock(&trustee_hash_lock);
+
+	write_unlock(&trustee_hash_lock);
 
 	return r;
 }
