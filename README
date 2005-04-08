@@ -116,13 +116,12 @@ trustees
 	deny flags.  The allow flags are initialized to [U] (use normal unix
 	access) and the deny flags are initialized to [].  
 	
-	Then the allow/deny
-	flags are gathered for /.  The flags here are or'd with the appropriate
-	default flags.  So if / gave everybody RWEBX the allow flags would be
-	[URWEBX] and the deny flags would still be [].  If everybody's flags
-	were instead DRWBX the allow flags would be [U] and the deny flags would
-	be [RWBX].  And lastly, if everybody was set to CU the allow flags would
-	be [] and the deny flags would be [].
+	Then the allow/deny flags are gathered for /.  The flags here are or'd with
+	the appropriate default flags.  So if / gave everybody RWEBX the allow
+	flags would be [URWEBX] and the deny flags would still be [].  If
+	everybody's flags were instead DRWBX the allow flags would be [U] and the
+	deny flags would be [RWBX].  And lastly, if everybody was set to CU the
+	allow flags would be [] and the deny flags would be [].
 	
 	Then the rights are looked up for /path.  The flags here are once again
 	or'd/cleared into the appropriate allow/deny flags as shown above.
