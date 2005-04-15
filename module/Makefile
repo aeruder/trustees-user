@@ -16,7 +16,7 @@ PWD := $(shell pwd)
 default:
 	$(MAKE) -C $(KDIR) $(ARCH) SUBDIRS=$(PWD) modules
 
-install:
+install: default
 	$(MAKE) -C $(KDIR) $(ARCH) SUBDIRS=$(PWD) modules_install
 
 clean:

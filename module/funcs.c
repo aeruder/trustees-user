@@ -376,12 +376,12 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	r->list = NULL;
 	r->usage = 2;
 
-	TS_DEBUG_MSG("Added element to trustee hash: j %d, name : %s\n", j,
-		     r->name.filename);
-
 	trustee_hash_used++;
 
 	write_unlock(&trustee_hash_lock);
+
+	TS_DEBUG_MSG("Added element to trustee hash: j %d, name : %s\n", j,
+		     r->name.filename);
 
 	return r;
 }
@@ -441,6 +441,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	int height = 0;
 	char *filecount;
 	char c;
+	char dbl_nul_slash[3] = { '/', '\0', '\0' };
 	struct trustee_name trustee_name;
 	struct trustee_ic *iter;
 
@@ -460,7 +461,16 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	read_unlock(&trustee_ic_lock);
 
 	filecount = file_name + 1;
-	while(*filecount) {
+	/* Try to handle the unlikely case where the string will be '/' 
+	 * out here to simplify the logic inside the loop.  We do this
+	 * by giving it a string with two nul byte terminators so that it
+	 * will gracefully (and safely) make it through the loop below.
+	 */
+	if (*filecount == '\0') {
+		file_name = dbl_nul_slash;
+		filecount = file_name + 1;
+	}
+	do {
 		c = *filecount;
 		*filecount = 0;
 		oldmask =
@@ -468,9 +478,10 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 					      height - depth + !is_dir);
 		height++;
 		*filecount = c;
-		for (filecount++; *filecount && (*filecount != '/');
-		     *filecount++);
-	}
+		++filecount;
+		while ((*filecount) && (*filecount != '/')) filecount++;
+
+	} while(*filecount);
 
 	return oldmask;
 }
