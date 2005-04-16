@@ -195,7 +195,6 @@ static int trustees_inode_permission(struct inode *inode,
 		 * I'm really not sure how it happens.
 		 */
 		if (inode == mnt->mnt_root->d_inode) {
-			printk(KERN_ERR "Trustees: getting a dentry of the mnt_root\n");
 			dentry = dget(mnt->mnt_root);
 		} else {
 			/* I have seen this happen once but I did not have any
