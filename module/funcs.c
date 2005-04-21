@@ -437,11 +437,11 @@ static inline void str_to_lower(char *string)
 int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 		 char *file_name, int unix_ret, int depth, int is_dir)
 {
+	static char dbl_nul_slash[3] = { '/', '\0', '\0' };
 	int oldmask = trustee_default_acl;
 	int height = 0;
 	char *filecount;
 	char c;
-	char dbl_nul_slash[3] = { '/', '\0', '\0' };
 	struct trustee_name trustee_name;
 	struct trustee_ic *iter;
 
@@ -592,8 +592,6 @@ int trustees_process_command(const struct trustee_command __user * command)
 	struct trustee_command c;
 
 	copy_from_user(&c, command, sizeof(struct trustee_command));
-
-	TS_DEBUG_MSG("set trustee called, command %d\n", c.command);
 
 	if ((current->euid != 0) && !capable(CAP_SYS_ADMIN)) {
 		r = -EACCES;

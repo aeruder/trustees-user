@@ -346,8 +346,6 @@ int trustees_init_security(void)
 		return -EINVAL;
 	}
 
-	TS_DEBUG_MSG("Security component registered\n");
-
 	return 0;
 }
 
@@ -359,6 +357,4 @@ void trustees_deinit_security(void)
 		TS_DEBUG_MSG
 		    ("Failure unregistering security component...\n");
 	}
-
-	TS_DEBUG_MSG("Security component unregistered\n");
 }
