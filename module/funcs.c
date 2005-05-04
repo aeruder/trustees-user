@@ -87,7 +87,7 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 
 		j = i + strlen(dentry->d_name.name);
 		if ((j + 2) > bufsize) {	/* reallocate - won't fit */
-			bufsize = (((j + 2) % FN_CHUNK_SIZE) + 2) * FN_CHUNK_SIZE;
+			bufsize = (((j + 2) / FN_CHUNK_SIZE) + 1) * FN_CHUNK_SIZE;
 			tmpbuf = kmalloc(bufsize, GFP_KERNEL);
 			if (!tmpbuf) {
 				kfree(buffer);
