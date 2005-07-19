@@ -1,8 +1,5 @@
 ifneq ($(KERNELRELEASE),)
-EXTRA_CFLAGS += -I$(SUBDIRS)/../include -DTRUSTEES_DEBUG -g
-obj-m := trustees.o
-trustees-objs := security.o fs.o init.o funcs.o
-
+include Kbuild
 else
 ifeq ($(uml),)
 KDIR := /lib/modules/`uname -r`/build
@@ -11,14 +8,15 @@ else
 KDIR := /home/andy/current-linux
 ARCH := 
 endif
-PWD := $(shell pwd)
+TRUSTEES_PWD := $(shell pwd)
 
-default:
-	$(MAKE) -C $(KDIR) $(ARCH) SUBDIRS=$(PWD) modules
+all::
+	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) modules
 
-install: default
-	$(MAKE) -C $(KDIR) $(ARCH) SUBDIRS=$(PWD) modules_install
+install::
+	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) modules_install
 
-clean:
-	rm -fr *.o *.mod.* *.ko .*o.cmd .tmp_versions
+clean::
+	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) clean
+
 endif
