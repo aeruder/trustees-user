@@ -35,23 +35,17 @@ struct trustee_name {
 };
 
 struct trustee_permission_capsule {
-	struct pemission_capsule *next;
+	struct list_head perm_list;
 	struct trustee_permission permission;
 };
 struct trustee_hash_element {
 	int usage;        /* 0 - unused, 1 - deleted, 2 - used */
 	struct trustee_name name;
-	struct trustee_permission_capsule *list;
-};
+	struct list_head perm_list;
 
-struct trustee_s_hash_element {
-	int usage;        /* 0 - unused, 1 - deleted, 2 - used */
-	dev_t dev;
-	const char *devname;
-	
-	int max;
-	int used;
-	char **paths;
+	struct trustee_hash_element *parent;
+	struct list_head sisters;
+	struct list_head children;
 };
 
 extern char *trustees_filename_for_dentry(struct dentry *dentry, int *d);

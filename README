@@ -42,6 +42,8 @@ II. Installation
 
 the kernel module
 
+	-=THIS STEP IS UNNECESSARY IF YOU USED THE KERNEL PATCH=-
+
 	The included module can be compiled for any 2.6.x kernel. CONFIG_SECURITY,
 	however, must be compiled in.  Assuming this is so, simply enter the
 	module/ directory and type
