@@ -196,7 +196,7 @@ static inline void free_trustee_name(struct trustee_name *name)
 
 static inline void free_hash_element(struct trustee_hash_element *e)
 {
-	e->usage = 1;
+	e->usage = TRUSTEE_HASH_ELEMENT_DELETED;
 	free_hash_element_list(e);
 	free_trustee_name(&e->name);
 }
@@ -309,7 +309,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		trustee_hash_used = 0;
 		trustee_hash_deleted = 0;
 		for (i = 0; i < trustee_hash_size; i++)
-			trustee_hash[i].usage = 0;
+			trustee_hash[i].usage = TRUSTEE_HASH_ELEMENT_NOTUSED;
 		write_unlock(&trustee_hash_lock);
 		up(&trustee_rebuild_hash_sem);
 	} else if ((trustee_hash_size * 3 / 4 < trustee_hash_used) || (trustee_hash_size - 2 < trustee_hash_used)) {	/*hash needed to be rebuilt, rebuilding hash */
@@ -333,11 +333,11 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 			return r;
 		}
 		for (i = 0; i < newsize; i++)
-			n[i].usage = 0;
+			n[i].usage = TRUSTEE_HASH_ELEMENT_NOTUSED;
 		write_lock(&trustee_hash_lock);
 		trustee_hash_used = 0;
 		for (i = 0; i < trustee_hash_size; i++) {
-			if (trustee_hash[i].usage == 2) {
+			if (trustee_hash[i].usage == TRUSTEE_HASH_ELEMENT_USED) {
 				for (j =
 				     hash(&trustee_hash[i].name) % newsize;
 				     n[j].usage; j = (j + 1) % newsize);
@@ -355,12 +355,12 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 
 	write_lock(&trustee_hash_lock);
 	for (j = hash(name) % trustee_hash_size;
-	     trustee_hash[j].usage == 2; j = (j + 1) % trustee_hash_size);
+	     trustee_hash[j].usage == TRUSTEE_HASH_ELEMENT_USED; j = (j + 1) % trustee_hash_size);
 	trustee_hash[j].name = *name;
 	*should_free = 0;
 	r = trustee_hash + j;
 	INIT_LIST_HEAD(&r->perm_list);
-	r->usage = 2;
+	r->usage = TRUSTEE_HASH_ELEMENT_USED;
 
 	trustee_hash_used++;
 
@@ -482,7 +482,7 @@ static void trustees_clear_all(void)
 		return;
 	write_lock(&trustee_hash_lock);
 	for (i = 0; i < trustee_hash_size; i++) {
-		if (trustee_hash[i].usage == 2)
+		if (trustee_hash[i].usage == TRUSTEE_HASH_ELEMENT_USED)
 			free_hash_element(&trustee_hash[i]);
 	}
 	kfree(trustee_hash);

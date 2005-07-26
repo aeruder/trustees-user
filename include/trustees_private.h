@@ -39,8 +39,14 @@ struct trustee_permission_capsule {
 	struct list_head perm_list;
 	struct trustee_permission permission;
 };
+
+/* For the usage field */
+#define TRUSTEE_HASH_ELEMENT_USED 2
+#define TRUSTEE_HASH_ELEMENT_DELETED 1
+#define TRUSTEE_HASH_ELEMENT_NOTUSED 0
+
 struct trustee_hash_element {
-	int usage;        /* 0 - unused, 1 - deleted, 2 - used */
+	int usage;      
 	struct trustee_name name;
 	struct list_head perm_list;
 };
