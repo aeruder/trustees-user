@@ -24,17 +24,10 @@
 #include <linux/poll.h>
 #include <linux/sched.h>
 #include <linux/limits.h>
+#include <linux/list.h>
 
 #include "trustees.h"
 #include "trustees_private.h"
-
-/* This is a hash keyed on devices.  Each device has an array
- * of filenames associated with that device. (Sorted alphanumerically).
- */
-DECLARE_RWSEM(trustee_s_hash_sem);
-static struct trustee_s_hash_element *trustee_s_hash = NULL;
-static int trustee_s_hash_size = 0, trustee_s_hash_used = 0,
-   trustee_s_hash_deleted = 0;
 
 /* This is a hash keyed on device/filename.  The hash elements
  * hold the actual permissions for that device/filename.
@@ -46,7 +39,7 @@ static int trustee_hash_size = 0, trustee_hash_used =
     0, trustee_hash_deleted = 0;
 
 rwlock_t trustee_ic_lock = RW_LOCK_UNLOCKED;
-static struct trustee_ic *trustee_ic_list = NULL;
+static LIST_HEAD(trustee_ic_list);
 
 #define FN_CHUNK_SIZE 64
 
@@ -165,54 +158,47 @@ static inline void add_ic_dev(dev_t dev, char __user *devname)
 	ic->devname = devname2;
 
 	write_lock(&trustee_ic_lock);
-	ic->next = trustee_ic_list;
-	trustee_ic_list = ic;
+	list_add(&ic->ic_list, &trustee_ic_list);
 	write_unlock(&trustee_ic_lock);
 }
 
 static inline void remove_ic_devs(void)
 {
-	struct trustee_ic *ic, *iter, *next;;
+	struct trustee_ic *ic, *temp_ic;
+	struct list_head temp_ic_list;
 
 	write_lock(&trustee_ic_lock);
-	ic = trustee_ic_list;
-	trustee_ic_list = NULL;
+	temp_ic_list = trustee_ic_list;
+	INIT_LIST_HEAD(&trustee_ic_list);
 	write_unlock(&trustee_ic_lock);
 
-	for (iter = ic; (iter); iter = next) {
-		next = iter->next;
-		kfree(iter->devname);
-		kfree(iter);
+	list_for_each_entry_safe(ic, temp_ic, &temp_ic_list, ic_list) {
+		kfree(ic->devname);
+		kfree(ic);
 	}
 }
 
-static inline void free_hash_element_list(struct trustee_hash_element e)
+static inline void free_hash_element_list(struct trustee_hash_element *e)
 {
-	struct trustee_permission_capsule *l1, *l2;
-	l1 = e.list;
-	while (l1 != NULL) {
-		l2 = l1;
-		l1 = (void *) l1->next;
-		kfree(l2);
+	struct trustee_permission_capsule *capsule, *temp;
+
+	list_for_each_entry_safe(capsule, temp, &e->perm_list, perm_list) {
+		list_del(&capsule->perm_list);
+		kfree(capsule);
 	}
-	e.list = NULL;
 }
 
 static inline void free_trustee_name(struct trustee_name *name)
 {
-	if (name->filename) {
-		kfree(name->filename);
-	}
-	if (name->devname) {
-		kfree(name->devname);
-	}
+	kfree(name->filename);
+	kfree(name->devname);
 }
 
-static inline void free_hash_element(struct trustee_hash_element e)
+static inline void free_hash_element(struct trustee_hash_element *e)
 {
-	e.usage = 1;
+	e->usage = 1;
 	free_hash_element_list(e);
-	free_trustee_name(&e.name);
+	free_trustee_name(&e->name);
 }
 
 
@@ -373,7 +359,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	trustee_hash[j].name = *name;
 	*should_free = 0;
 	r = trustee_hash + j;
-	r->list = NULL;
+	INIT_LIST_HEAD(&r->perm_list);
 	r->usage = 2;
 
 	trustee_hash_used++;
@@ -396,7 +382,7 @@ static int get_trustee_mask_for_name(struct trustee_name *name,
 	if (!e) {
 		return oldmask;
 	}
-	for (l = e->list; l != NULL; l = (void *) l->next) {
+	list_for_each_entry(l, &e->perm_list, perm_list) {
 		if ((height < 0)
 		    && (l->permission.mask & TRUSTEE_ONE_LEVEL_MASK))
 			continue;
@@ -450,7 +436,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	trustee_name.filename = file_name;
 
 	read_lock(&trustee_ic_lock);
-	for (iter = trustee_ic_list; (iter); iter = iter->next) {
+	list_for_each_entry(iter, &trustee_ic_list, ic_list) {
 		if (trustee_dev_cmp
 		    (iter->dev, trustee_name.dev, iter->devname,
 		     trustee_name.devname)) {
@@ -497,7 +483,7 @@ static void trustees_clear_all(void)
 	write_lock(&trustee_hash_lock);
 	for (i = 0; i < trustee_hash_size; i++) {
 		if (trustee_hash[i].usage == 2)
-			free_hash_element(trustee_hash[i]);
+			free_hash_element(&trustee_hash[i]);
 	}
 	kfree(trustee_hash);
 	trustee_hash = NULL;
@@ -606,48 +592,6 @@ int trustees_process_command(const struct trustee_command __user * command)
 		r = 0;
 		trustees_clear_all();
 		goto unlk;
-	case TRUSTEE_COMMAND_REMOVE:
-		if (!prepare_trustee_name(&c, &name)) {
-			r = -ENOMEM;
-			goto unlk;
-		}
-		e = get_trustee_for_name(&name);
-		if (e == NULL) {
-			r = -ENOENT;
-			free_trustee_name(&name);
-			goto unlk;
-		}
-		free_hash_element(*e);
-		trustee_hash_deleted++;
-		free_trustee_name(&name);
-		r = 0;
-		goto unlk;
-	case TRUSTEE_COMMAND_REPLACE:
-		if (!prepare_trustee_name(&c, &name)) {
-			r = -ENOMEM;
-			goto unlk;
-		}
-
-		e = getallocate_trustee_for_name(&name, &should_free);
-		if (e == NULL) {
-			r = -ENOMEM;
-			if (should_free)
-				free_trustee_name(&name);
-			goto unlk;
-		}
-		free_hash_element_list(*e);
-		capsule =
-		    kmalloc(sizeof(struct trustee_permission_capsule),
-			    GFP_KERNEL);
-		capsule->permission = c.permission;
-		capsule->next = (void *) e->list;
-		e->list = capsule;
-		r = 0;
-		if (should_free)
-			free_trustee_name(&name);
-
-		goto unlk;
-
 	case TRUSTEE_COMMAND_ADD:
 		if (!prepare_trustee_name(&c, &name)) {
 			r = -ENOMEM;
@@ -665,13 +609,13 @@ int trustees_process_command(const struct trustee_command __user * command)
 		    kmalloc(sizeof(struct trustee_permission_capsule),
 			    GFP_KERNEL);
 		capsule->permission = c.permission;
-		capsule->next = (void *) e->list;
-		e->list = capsule;
+		INIT_LIST_HEAD(&capsule->perm_list);
+		list_add(&capsule->perm_list, &e->perm_list);
+
 		r = 0;
 		if (should_free)
 			free_trustee_name(&name);
 		goto unlk;
-
 
 	}
       unlk:

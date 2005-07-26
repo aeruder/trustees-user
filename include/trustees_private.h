@@ -18,6 +18,7 @@
 #include <linux/types.h>
 #include <linux/dcache.h>
 #include <linux/kdev_t.h>
+#include <linux/list.h>
 #include "trustees.h"
 
 #define TRUSTEE_DEFAULT_MASK TRUSTEE_USE_UNIX_MASK
@@ -25,7 +26,7 @@
 struct trustee_ic {
 	dev_t dev;
 	char *devname;		/* ONLY if MAJOR(dev)==0 */
-	struct trustee_ic *next;
+	struct list_head ic_list;
 };
 
 struct trustee_name {
@@ -35,23 +36,13 @@ struct trustee_name {
 };
 
 struct trustee_permission_capsule {
-	struct pemission_capsule *next;
+	struct list_head perm_list;
 	struct trustee_permission permission;
 };
 struct trustee_hash_element {
 	int usage;        /* 0 - unused, 1 - deleted, 2 - used */
 	struct trustee_name name;
-	struct trustee_permission_capsule *list;
-};
-
-struct trustee_s_hash_element {
-	int usage;        /* 0 - unused, 1 - deleted, 2 - used */
-	dev_t dev;
-	const char *devname;
-	
-	int max;
-	int used;
-	char **paths;
+	struct list_head perm_list;
 };
 
 extern char *trustees_filename_for_dentry(struct dentry *dentry, int *d);
@@ -66,7 +57,7 @@ extern int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 extern int trustees_process_command(const struct trustee_command __user *
 				    command);
 
-#define TRUSTEE_INITIAL_HASH_SIZE 20
+#define TRUSTEE_INITIAL_HASH_SIZE 32
 #define TRUSTEE_INITIAL_S_HASH_SIZE 5
 #define TRUSTEE_INITIAL_S_PATHS_SIZE 10
 
