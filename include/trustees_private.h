@@ -51,21 +51,19 @@ struct trustee_hash_element {
 	struct list_head perm_list;
 };
 
-extern char *trustees_filename_for_dentry(struct dentry *dentry, int *d);
+extern char *trustees_filename_for_dentry(struct dentry *dentry, int *d, int trunc);
 
 extern int trustees_funcs_init_globals(void);
 extern int trustees_funcs_cleanup_globals(void);
 
-extern int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
-			char *file_name, int unix_ret, int depth,
-			int is_dir);
+int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
+		 char *file_name, int unix_ret, int depth, int is_dir,
+		 struct trustee_hash_element **deepest);
 
 extern int trustees_process_command(const struct trustee_command __user *
 				    command);
 
 #define TRUSTEE_INITIAL_HASH_SIZE 32
-#define TRUSTEE_INITIAL_S_HASH_SIZE 5
-#define TRUSTEE_INITIAL_S_PATHS_SIZE 10
 
 #define TRUSTEE_INITIAL_NAME_BUFFER 256
 #define TRUSTEE_HASDEVNAME(TNAME) (MAJOR((TNAME).dev)==0)
