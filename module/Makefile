@@ -13,7 +13,7 @@ TRUSTEES_PWD := $(shell pwd)
 all::
 	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) modules
 
-install::
+install:: all
 	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) modules_install
 
 clean::

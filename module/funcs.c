@@ -29,31 +29,57 @@
 #include "trustees.h"
 #include "trustees_private.h"
 
-/* This is a hash keyed on device/filename.  The hash elements
- * hold the actual permissions for that device/filename.
+/*
+ * This is a hash of all the trustee_names currently added.  These values
+ * are hashed on a combination of device/filename.  Before reading/writing
+ * be sure to take care of the locking of trustee_hash_lock.
  */
-rwlock_t trustee_hash_lock = RW_LOCK_UNLOCKED;
+static rwlock_t trustee_hash_lock = RW_LOCK_UNLOCKED;
 DECLARE_MUTEX(trustee_rebuild_hash_sem);
 static struct trustee_hash_element *trustee_hash = NULL;
 static int trustee_hash_size = 0, trustee_hash_used =
     0, trustee_hash_deleted = 0;
 
-rwlock_t trustee_ic_lock = RW_LOCK_UNLOCKED;
+/*
+ * This is the deepest level trustee.  When calculating filenames, we can
+ * skip several of the levels in many case since we know it won't be any
+ * deeper than this.
+ *
+ * /           => 0
+ * /test       => 1
+ * /test/blah  => 2
+ */
+static int deepest_level = 0;
+
+/* 
+ * A list of filesystems that need to have their case
+ * ignored.
+ */
+static rwlock_t trustee_ic_lock = RW_LOCK_UNLOCKED;
 static LIST_HEAD(trustee_ic_list);
 
-#define FN_CHUNK_SIZE 64
 
 /* The calling method needs to free the buffer created by this function
  * This method returns the filename for a dentry.  This is, of course, 
- * relative to the device.
+ * relative to the device.  The filename can be truncated to be as deep as
+ * the deepest trustee.  The depth returned in d will always be the true
+ * depth, however.
+ *
+ * Args:
+ *   dentry: The dentry we are interested in.
+ *   d: a pointer to the place where the depth can be stored.
+ *   trunc: ok to truncate the name to the longest that needs to be figured out.
  */
-char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
+
+#define FN_CHUNK_SIZE 64
+char *trustees_filename_for_dentry(struct dentry *dentry, int *d, int trunc)
 {
 	char *buffer = NULL, *tmpbuf = NULL;
 	int bufsize = FN_CHUNK_SIZE;
 	char c;
 	int i, j, k;
 	int depth = 0;
+	struct dentry *temp_dentry;
 
 	if (dentry->d_parent == NULL) {
 		TS_DEBUG_MSG("d_parent is null\n");
@@ -73,10 +99,15 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 
 	buffer[0] = '/';
 	buffer[i = 1] = '\0';
+	for (temp_dentry = dentry; !IS_ROOT(dentry); temp_dentry = temp_dentry->d_parent)
+		depth++;
+	if (d) *d = depth;
+	if (deepest_level <= 0) return buffer;
 
 	for (;;) {
 		if (IS_ROOT(dentry))
 			break;
+		if (depth-- > deepest_level) continue;
 
 		j = i + strlen(dentry->d_name.name);
 		if ((j + 2) > bufsize) {	/* reallocate - won't fit */
@@ -97,7 +128,6 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 			buffer[j - 1 - k] = dentry->d_name.name[k];
 		}
 		i = j;
-		++depth;
 		buffer[i++] = '/';
 		dentry = dentry->d_parent;
 	}
@@ -110,12 +140,12 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d)
 		buffer[i - j - 1] = c;
 	}
 
-	if (d)
-		*d = depth;
-
 	return buffer;
 }
 
+/*
+ * Add a filesystem as a ignored-case dev.
+ */
 static inline void add_ic_dev(dev_t dev, char __user *devname)
 {
 	char *devname2;
@@ -162,13 +192,17 @@ static inline void add_ic_dev(dev_t dev, char __user *devname)
 	write_unlock(&trustee_ic_lock);
 }
 
+/* 
+ * Remove all ignored-case filesystems.
+ */
 static inline void remove_ic_devs(void)
 {
 	struct trustee_ic *ic, *temp_ic;
 	struct list_head temp_ic_list;
 
 	write_lock(&trustee_ic_lock);
-	temp_ic_list = trustee_ic_list;
+	INIT_LIST_HEAD(&temp_ic_list);
+	list_splice(&trustee_ic_list, &temp_ic_list);
 	INIT_LIST_HEAD(&trustee_ic_list);
 	write_unlock(&trustee_ic_lock);
 
@@ -178,6 +212,9 @@ static inline void remove_ic_devs(void)
 	}
 }
 
+/* 
+ * This frees all the capsules in a trustee element.
+ */
 static inline void free_hash_element_list(struct trustee_hash_element *e)
 {
 	struct trustee_permission_capsule *capsule, *temp;
@@ -188,12 +225,19 @@ static inline void free_hash_element_list(struct trustee_hash_element *e)
 	}
 }
 
+/*
+ * Free a trustee name.  This frees the devname and the filename
+ */
 static inline void free_trustee_name(struct trustee_name *name)
 {
 	kfree(name->filename);
 	kfree(name->devname);
 }
 
+/*
+ * Frees the capsules, and the filenames for a trustee hash element.
+ * Also marks it as unused in the hash.
+ */
 static inline void free_hash_element(struct trustee_hash_element *e)
 {
 	e->usage = TRUSTEE_HASH_ELEMENT_DELETED;
@@ -202,8 +246,10 @@ static inline void free_hash_element(struct trustee_hash_element *e)
 }
 
 
-/* hashing function researched by Karl Nelson <kenelson @ ece ucdavis edu> 
- * and is used in glib. */
+/* 
+ * hashing function researched by Karl Nelson <kenelson @ ece ucdavis edu> 
+ * and is used in glib. 
+ */
 static inline unsigned int hash_string(const char *s)
 {
 	unsigned int v = 0;
@@ -216,6 +262,9 @@ static inline unsigned int hash_string(const char *s)
 	return v;
 }
 
+/*
+ * Return the hash for a device.
+ */
 static inline unsigned int hash_device(const char *name, dev_t device)
 {
 	if (MAJOR(device) == 0) {
@@ -225,12 +274,19 @@ static inline unsigned int hash_device(const char *name, dev_t device)
 	return new_encode_dev(device);
 }
 
+/*
+ * Return the hash for a file.  This is a combination of the
+ * hash of the filename and the hash for the device.
+ */
 static inline unsigned int hash(const struct trustee_name *name)
 {
 	return hash_string(name->filename) ^ 
 	       hash_device(name->devname, name->dev);
 }
 
+/*
+ * Compare two devices.  Return 1 if they are equal otherwise return 0
+ */
 static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1,
 				  char *devname2)
 {
@@ -240,6 +296,35 @@ static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1,
 		return (dev1 == dev2);
 	return 0;
 }
+
+/*
+ * Add a permission capsule to a trustee
+ */
+static inline void add_capsule_to_trustee(struct trustee_hash_element *e, 
+					  struct trustee_permission acl)
+{
+	struct trustee_permission_capsule *capsule;
+	capsule =
+	    kmalloc(sizeof(struct trustee_permission_capsule),
+		    GFP_KERNEL);
+	if (!capsule) {
+		TS_DEBUG_MSG
+		    ("Can not allocate memory for trustee capsule\n");
+		return;
+	}
+
+	capsule->permission = acl;
+
+	write_lock(&trustee_hash_lock);
+	list_add(&capsule->perm_list, &e->perm_list);
+	write_unlock(&trustee_hash_lock);
+}
+
+  
+/* 
+ * Compare two trustee_name's.  Returns 1 if they are are equal
+ * otherwise return 0
+ */
 static inline int trustee_name_cmp(const struct trustee_name *n1,
 				   const struct trustee_name *n2)
 {
@@ -248,6 +333,9 @@ static inline int trustee_name_cmp(const struct trustee_name *n1,
 	return 0;
 }
 
+/* 
+ * Return the trustee element for a name.
+ */
 static struct trustee_hash_element *get_trustee_for_name(const struct
 							 trustee_name
 							 *name)
@@ -276,8 +364,33 @@ static struct trustee_hash_element *get_trustee_for_name(const struct
 
 }
 
+/*
+ * Calculate the deepest level.
+ */
+static inline void calculate_deepest_level(const struct trustee_name *name)
+{
+	char *fn = name->filename;
+	char *x;
+	int level = 0;
+
+	for (x = fn; *x; ++x) {
+		if (*x == '/')
+			++level;
+	}
+
+	/* If it is the root, it should have
+	 * a level of 0.
+	 */
+	if (x == (fn + 1)) level = 0;
+
+	if (level > deepest_level) deepest_level = level;
+}
+
 /* This function does not allocate memory for filename and devname. 
  * It should be allocated at calling level 
+ *
+ * Return the trustee element for a name if it exists, otherwise
+ * allocate a new element and add to the hash and return that.
  */
 static struct trustee_hash_element *getallocate_trustee_for_name
     (const struct trustee_name *name, int *should_free) {
@@ -354,13 +467,16 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 	}
 
 	write_lock(&trustee_hash_lock);
+
 	for (j = hash(name) % trustee_hash_size;
 	     trustee_hash[j].usage == TRUSTEE_HASH_ELEMENT_USED; j = (j + 1) % trustee_hash_size);
 	trustee_hash[j].name = *name;
+
 	*should_free = 0;
 	r = trustee_hash + j;
 	INIT_LIST_HEAD(&r->perm_list);
 	r->usage = TRUSTEE_HASH_ELEMENT_USED;
+	calculate_deepest_level(name);
 
 	trustee_hash_used++;
 
@@ -371,8 +487,13 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 
 	return r;
 }
+
+/*
+ * Get the mask for a trustee name.
+ */ 
 static int get_trustee_mask_for_name(struct trustee_name *name,
-				     int oldmask, int height)
+				     int oldmask, int height, 
+				     struct trustee_hash_element **element)
 {
 	struct trustee_hash_element *e;
 	int m;
@@ -386,6 +507,10 @@ static int get_trustee_mask_for_name(struct trustee_name *name,
 		if ((height < 0)
 		    && (l->permission.mask & TRUSTEE_ONE_LEVEL_MASK))
 			continue;
+		if (element) { 
+			*element = e;
+			element = NULL;
+		}
 		appl = ((!(l->permission.mask & TRUSTEE_IS_GROUP_MASK))
 			&& (current->fsuid == l->permission.u.uid))
 		    || (((l->permission.mask & TRUSTEE_IS_GROUP_MASK))
@@ -411,6 +536,9 @@ static int get_trustee_mask_for_name(struct trustee_name *name,
 	return oldmask;
 }
 
+/* 
+ * Convert a string to lowercase for ignored-case devices
+ */
 static inline void str_to_lower(char *string)
 {
 	for (; *string; ++string) {
@@ -419,9 +547,12 @@ static inline void str_to_lower(char *string)
 	}
 }
 
-
+/* 
+ * Return the mask for a file.
+ */
 int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
-		 char *file_name, int unix_ret, int depth, int is_dir)
+		 char *file_name, int unix_ret, int depth, int is_dir,
+		 struct trustee_hash_element **deepest)
 {
 	static char dbl_nul_slash[3] = { '/', '\0', '\0' };
 	int oldmask = trustee_default_acl;
@@ -446,6 +577,8 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	}
 	read_unlock(&trustee_ic_lock);
 
+	if (deepest) *deepest = NULL;
+
 	filecount = file_name + 1;
 	/* Try to handle the unlikely case where the string will be '/' 
 	 * out here to simplify the logic inside the loop.  We do this
@@ -461,7 +594,8 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 		*filecount = 0;
 		oldmask =
 		    get_trustee_mask_for_name(&trustee_name, oldmask,
-					      height - depth + !is_dir);
+					      height - depth + !is_dir, 
+					      deepest);
 		height++;
 		*filecount = c;
 		++filecount;
@@ -478,32 +612,42 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 static void trustees_clear_all(void)
 {
 	int i;
-	if (!trustee_hash)
-		return;
-	write_lock(&trustee_hash_lock);
-	for (i = 0; i < trustee_hash_size; i++) {
-		if (trustee_hash[i].usage == TRUSTEE_HASH_ELEMENT_USED)
-			free_hash_element(&trustee_hash[i]);
+	if (trustee_hash) {
+		write_lock(&trustee_hash_lock);
+		for (i = 0; i < trustee_hash_size; i++) {
+			if (trustee_hash[i].usage == TRUSTEE_HASH_ELEMENT_USED)
+				free_hash_element(&trustee_hash[i]);
+		}
+		kfree(trustee_hash);
+		trustee_hash = NULL;
+		deepest_level = 0;
+		write_unlock(&trustee_hash_lock);
 	}
-	kfree(trustee_hash);
-	trustee_hash = NULL;
-	write_unlock(&trustee_hash_lock);
 
 	remove_ic_devs();
 }
 
+/*
+ * Initialize globals
+ */
 int trustees_funcs_init_globals(void)
 {
 	trustees_clear_all();
 	return 0;
 }
 
+/*
+ * Clear globals
+ */
 int trustees_funcs_cleanup_globals(void)
 {
 	trustees_clear_all();
 	return 0;
 }
 
+/*
+ * Prepare a trustee name from a passed in trustee name.
+ */
 static int prepare_trustee_name(const struct trustee_command *command,
 				struct trustee_name *name)
 {
@@ -568,12 +712,14 @@ static int prepare_trustee_name(const struct trustee_command *command,
 	return 1;
 }
 
+/* 
+ * Process a user command
+ */
 int trustees_process_command(const struct trustee_command __user * command)
 {
 	int r = -ENOSYS;
 	struct trustee_name name;
 	struct trustee_hash_element *e;
-	struct trustee_permission_capsule *capsule;
 	int should_free;
 	struct trustee_command c;
 
@@ -604,13 +750,7 @@ int trustees_process_command(const struct trustee_command __user * command)
 				free_trustee_name(&name);
 			goto unlk;
 		}
-
-		capsule =
-		    kmalloc(sizeof(struct trustee_permission_capsule),
-			    GFP_KERNEL);
-		capsule->permission = c.permission;
-		INIT_LIST_HEAD(&capsule->perm_list);
-		list_add(&capsule->perm_list, &e->perm_list);
+		add_capsule_to_trustee(e, c.permission);
 
 		r = 0;
 		if (should_free)

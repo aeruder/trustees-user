@@ -124,6 +124,58 @@ static inline struct dentry *find_inode_dentry(struct inode *inode,
 	return dentry;
 }
 
+/* 
+ * Return 1 if they are under the same set of trustees
+ * otherwise return 0.
+ */
+static inline int have_same_trustees(struct dentry *old_dentry, 
+				     struct dentry *new_dentry)
+{
+	struct vfsmount *mnt;
+	char *old_file_name, *new_file_name;
+	int old_depth, new_depth;
+	struct trustee_hash_element *old_deep, *new_deep;
+	int is_dir;
+	int ret = 0;
+
+	mnt = find_inode_mnt(old_dentry->d_inode, NULL);
+	if (unlikely(!mnt)) {
+		printk(KERN_ERR "Trustees: inode does not have a mnt!\n");
+		return 0;
+	}
+
+	old_file_name = trustees_filename_for_dentry(old_dentry, &old_depth, 1);
+	if (!old_file_name) {
+		printk(KERN_ERR "Trustees: Couldn't allocate filename\n");
+		goto out_old_dentry;
+	}
+
+	new_file_name = trustees_filename_for_dentry(new_dentry, &new_depth, 1);
+	if (!new_file_name) {
+		printk(KERN_ERR "Trustees: Couldn't allocate filename\n");
+		goto out_new_dentry;
+	}
+
+	is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
+
+	trustee_perm(old_dentry, mnt, old_file_name, ret, old_depth, is_dir, 
+		     &old_deep);
+	trustee_perm(new_dentry, mnt, new_file_name, ret, new_depth, is_dir, 
+		     &new_deep);
+	if (old_deep == new_deep) {
+		ret = 1;
+	}
+
+	kfree(new_file_name);
+out_new_dentry:
+	kfree(old_file_name);
+out_old_dentry:
+	mntput(mnt);
+
+	return ret;
+}
+
+
 static int trustees_inode_rename(struct inode *old_dir,
 				 struct dentry *old_dentry,
 				 struct inode *new_dir,
@@ -209,7 +261,7 @@ static int trustees_inode_permission(struct inode *inode,
 			goto out_mnt;
 		}
 	}
-	file_name = trustees_filename_for_dentry(dentry, &depth);
+	file_name = trustees_filename_for_dentry(dentry, &depth, 1);
 	if (!file_name) {
 		printk(KERN_ERR "Trustees: Couldn't allocate filename\n");
 		ret = -EACCES;
@@ -218,7 +270,8 @@ static int trustees_inode_permission(struct inode *inode,
 
 	is_dir = S_ISDIR(inode->i_mode);
 
-	amask = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir);
+	amask = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir, 
+			     (struct trustee_hash_element **)NULL);
 	dmask = amask >> TRUSTEE_NUM_ACL_BITS;
 
 	/* no permission if denied */
@@ -260,14 +313,9 @@ static int trustees_inode_permission(struct inode *inode,
 }
 
 /* We should only allow hard links under one of two conditions:
- *   1. Its in the same directory
- *        - in a module that bases permissions off of the location of a 
- *          inode in a directory hierarchy, allowing people to make hard
- *          links from one directory to another constitutes a major security
- *          risk.
- *        - TODO We need to check that the new location will not change the 
- *          rights of the file.  This negates the use of the above rule.
- *          Perhaps a virtual filesystem hook could be used to control this behavior?
+ *   1. Its in the same trustee 
+ *        - if the two dentries are covered by the same trustee, there shouldn't
+ *          be much of a problem with allowing the hardlink to occur.
  *   2. fsuid = 0 
  */
 static int trustees_inode_link(struct dentry *old_dentry,
@@ -277,18 +325,17 @@ static int trustees_inode_link(struct dentry *old_dentry,
 	if (current->fsuid == 0)
 		return 0;
 
-	if (old_dentry->d_parent == new_dentry->d_parent) {
+	if (have_same_trustees(old_dentry, new_dentry))
 		return 0;
-	}
 
 	return -EXDEV;
 }
 
 /* TODO We have a few renames to protect against:
- *   1. Don't allow people to move hardlinked files into another directory.
- *      - If someone can move hardlinked files into another directory, it
+ *   1. Don't allow people to move hardlinked files into another trustee.
+ *      - If someone can move hardlinked files into another trustee, it
  *        poses a security risk since additional permissions may come with
- *        the alternate directory.
+ *        the alternate trustee.
  *   2. We don't want people to move any file that gets different permissions
  *      in one place than another.
  *   3. We don't want people to move any directory where the directory either gets
@@ -311,12 +358,11 @@ static int trustees_inode_rename(struct inode *old_dir,
 	if (S_ISDIR(old_dentry->d_inode->i_mode))
 		return 0;
 
-	if (old_dentry->d_inode->i_nlink > 1 &&
-	    old_dentry->d_parent != new_dentry->d_parent) {
-		return -EXDEV;
-	}
+	if (old_dentry->d_inode->i_nlink <= 1) return 0;
 
-	return 0;
+	if (have_same_trustees(old_dentry, new_dentry)) return 0;
+
+	return -EXDEV;
 }
 
 /* Return CAP_DAC_OVERRIDE on everything.  We want to handle our own
