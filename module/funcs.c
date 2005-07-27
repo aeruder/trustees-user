@@ -99,7 +99,7 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d, int trunc)
 
 	buffer[0] = '/';
 	buffer[i = 1] = '\0';
-	for (temp_dentry = dentry; !IS_ROOT(dentry); temp_dentry = temp_dentry->d_parent)
+	for (temp_dentry = dentry; !IS_ROOT(temp_dentry); temp_dentry = temp_dentry->d_parent)
 		depth++;
 	if (d) *d = depth;
 	if (deepest_level <= 0) return buffer;
@@ -167,12 +167,12 @@ static inline void add_ic_dev(dev_t dev, char __user *devname)
 	devname2 = kmalloc(dev_len + 1, GFP_KERNEL);
 	if (!devname2) {
 		TS_DEBUG_MSG
-		    ("Seems that we have ran out of memory adding ic dev!");
+		    ("Seems that we have ran out of memory adding ic dev!\n");
 		return;
 	}
 	if (strncpy_from_user(devname2, devname, dev_len) < 0) {
 		TS_DEBUG_MSG
-		  ("Something funky with devname in add_ic_dev");
+		  ("Something funky with devname in add_ic_dev\n");
 		kfree(devname2);
 		return;
 	}
