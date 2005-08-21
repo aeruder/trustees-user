@@ -723,7 +723,10 @@ int trustees_process_command(const struct trustee_command __user * command)
 	int should_free;
 	struct trustee_command c;
 
-	copy_from_user(&c, command, sizeof(struct trustee_command));
+	if (copy_from_user(&c, command, sizeof(struct trustee_command))) {
+		r = -EIO;
+		goto unlk;
+	}
 
 	if ((current->euid != 0) && !capable(CAP_SYS_ADMIN)) {
 		r = -EACCES;

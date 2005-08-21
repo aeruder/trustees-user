@@ -145,6 +145,7 @@ static ssize_t trustees_read_status(struct file *filp, char __user * buf,
 				    size_t count, loff_t * offset)
 {
 	static const char msg[] = "Damnit, it works, OK?!\n";
+	unsigned long nocopy;
 
 	if (*offset >= (sizeof(msg) - 1)) {
 		return 0;
@@ -153,9 +154,9 @@ static ssize_t trustees_read_status(struct file *filp, char __user * buf,
 	if (count > (sizeof(msg) - 1 - *offset)) {
 		count = sizeof(msg) - 1 - *offset;
 	}
-	/* FIXME This needs to check return value */
-	copy_to_user(buf, msg, count);
+	nocopy = copy_to_user(buf, msg, count);
 	(*offset) += count;
+	(*offset) -= nocopy;
 
 	return count;
 }
