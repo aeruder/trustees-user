@@ -11,12 +11,12 @@ endif
 TRUSTEES_PWD := $(shell pwd)
 
 all::
-	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) modules
+	$(MAKE) -C $(KDIR) ARCH=$(ARCH) M=$(TRUSTEES_PWD) modules
 
 install:: all
-	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) modules_install
+	$(MAKE) -C $(KDIR) ARCH=$(ARCH) M=$(TRUSTEES_PWD) modules_install
 
 clean::
-	$(MAKE) -C $(KDIR) $(ARCH) M=$(TRUSTEES_PWD) clean
+	$(MAKE) -C $(KDIR) ARCH=$(ARCH) M=$(TRUSTEES_PWD) clean
 
 endif
