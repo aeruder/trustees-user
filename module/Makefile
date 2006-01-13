@@ -1,29 +1,23 @@
 ifneq ($(KERNELRELEASE),)
 include Kbuild
 else
-ifeq ($(uml),)
 KDIR := /lib/modules/`uname -r`/build
 ARCH :=
-else
-KDIR := /home/andy/current-linux
-ARCH :=  
-endif
 
-ifeq ($(ARCH),)
-ARCHLINE =
-else
-ARCHLINE = ARCH=$(ARCH)
+ifneq ($(ARCH),)
+ARCHLINE := ARCH=$(ARCH)
 endif
 
 TRUSTEES_PWD := $(shell pwd)
+CONFIG_TRUSTEES := m
 
 all::
-	$(MAKE) -C $(KDIR) $(ARCHLINE) M=$(TRUSTEES_PWD) modules
+	$(MAKE) -C $(KDIR) $(ARCHLINE) CONFIG_TRUSTEES=m M=$(TRUSTEES_PWD) modules
 
 install:: all
-	$(MAKE) -C $(KDIR) $(ARCHLINE) M=$(TRUSTEES_PWD) modules_install
+	$(MAKE) -C $(KDIR) $(ARCHLINE) CONFIG_TRUSTEES=m M=$(TRUSTEES_PWD) modules_install
 
 clean::
-	$(MAKE) -C $(KDIR) $(ARCHLINE) M=$(TRUSTEES_PWD) clean
+	$(MAKE) -C $(KDIR) $(ARCHLINE) CONFIG_TRUSTEES=m M=$(TRUSTEES_PWD) clean
 
 endif

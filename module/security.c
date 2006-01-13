@@ -183,13 +183,36 @@ static int trustees_inode_rename(struct inode *old_dir,
 static int trustees_inode_link(struct dentry *old_dentry,
 			       struct inode *dir,
 			       struct dentry *new_dentry);
+
 /* Structure where we fill in the various hooks we are implementing in this module
  */
 struct security_operations trustees_security_ops = {
 	.capable = trustees_capable,
 	.inode_permission = trustees_inode_permission,
 	.inode_link = trustees_inode_link,
-	.inode_rename = trustees_inode_rename
+	.inode_rename = trustees_inode_rename,
+
+	.ptrace =			cap_ptrace,
+	.capget =			cap_capget,
+	.capset_check =			cap_capset_check,
+	.capset_set =			cap_capset_set,
+	.settime =			cap_settime,
+	.netlink_send =			cap_netlink_send,
+	.netlink_recv =			cap_netlink_recv,
+
+	.bprm_apply_creds =		cap_bprm_apply_creds,
+	.bprm_set_security =		cap_bprm_set_security,
+	.bprm_secureexec =		cap_bprm_secureexec,
+
+	.inode_setxattr =		cap_inode_setxattr,
+	.inode_removexattr =		cap_inode_removexattr,
+
+	.task_post_setuid =		cap_task_post_setuid,
+	.task_reparent_to_init =	cap_task_reparent_to_init,
+
+	.syslog =                       cap_syslog,
+
+	.vm_enough_memory =             cap_vm_enough_memory
 };
 
 #define ALL_MAYS (MAY_WRITE | MAY_EXEC | MAY_READ)
@@ -376,7 +399,7 @@ static int trustees_capable(struct task_struct *tsk, int cap)
 	if (cap_is_fs_cap(cap) ? tsk->fsuid == 0 : tsk->euid == 0)
 		return 0;
 
-	return -EPERM;
+	return cap_capable(tsk, cap);
 }
 
 /* Register the security module
