@@ -34,7 +34,7 @@
  * are hashed on a combination of device/filename.  Before reading/writing
  * be sure to take care of the locking of trustee_hash_lock.
  */
-static rwlock_t trustee_hash_lock = RW_LOCK_UNLOCKED;
+static rwlock_t trustee_hash_lock;
 DECLARE_MUTEX(trustee_rebuild_hash_sem);
 static struct trustee_hash_element *trustee_hash = NULL;
 static int trustee_hash_size = 0, trustee_hash_used =
@@ -55,7 +55,7 @@ static int deepest_level = 0;
  * A list of filesystems that need to have their case
  * ignored.
  */
-static rwlock_t trustee_ic_lock = RW_LOCK_UNLOCKED;
+static rwlock_t trustee_ic_lock;
 static LIST_HEAD(trustee_ic_list);
 
 
@@ -340,28 +340,24 @@ static struct trustee_hash_element *get_trustee_for_name(const struct
 							 trustee_name
 							 *name)
 {
-
-	unsigned int i;
-
-	if (trustee_hash == NULL)
-		return NULL;
+	struct trustee_hash_element *item = NULL;
 
 	read_lock(&trustee_hash_lock);
 
-	for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage;
-	     i = (i + 1) % trustee_hash_size) {
-		if (trustee_hash[i].usage == 1)
-			continue;
-		if (trustee_name_cmp(&trustee_hash[i].name, name)) {
-			read_unlock(&trustee_hash_lock);
-			return trustee_hash + i;
-		}
+	if (trustee_hash)
+	{
+		unsigned int i;
+		
+		for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size)
+			if ((trustee_hash[i].usage != 1) && (trustee_name_cmp(&trustee_hash[i].name, name))) {
+				item = trustee_hash + i;
+				break;
+			}
 	}
 
 	read_unlock(&trustee_hash_lock);
 
-	return NULL;
-
+	return item;
 }
 
 /*
@@ -632,6 +628,8 @@ static void trustees_clear_all(void)
  */
 int trustees_funcs_init_globals(void)
 {
+	rwlock_init(&trustee_hash_lock);
+	rwlock_init(&trustee_ic_lock);
 	trustees_clear_all();
 	return 0;
 }
