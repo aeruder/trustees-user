@@ -55,6 +55,12 @@ the kernel module
 
 	make KDIR=/path/to/src/linux-2.6.x install
 
+	After you install trustees, you will need to run
+
+	depmod -a
+
+	To rebuild your module dependencies file.
+
 the settrustees tool
 
 	Simple enter the src/ directory and type make.  This will build the
