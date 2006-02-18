@@ -94,8 +94,8 @@ static inline struct vfsmount *find_inode_mnt(struct inode *inode,
 	/* Okay, we need to find the vfsmount by looking
 	 * at the namespace now.
 	 */
+	down_read(&namespace_sem);
 	ns = current->namespace;
-	down_read(&ns->sem);
 
 	list_for_each_entry(mnt, &ns->list, mnt_list) {
 		if (mnt->mnt_sb == inode->i_sb) {
@@ -105,7 +105,7 @@ static inline struct vfsmount *find_inode_mnt(struct inode *inode,
 	}
 
       out:
-	up_read(&ns->sem);
+	up_read(&namespace_sem);
 
 	return mnt;
 }
