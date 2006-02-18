@@ -19,6 +19,7 @@
 #include <linux/dcache.h>
 #include <linux/kdev_t.h>
 #include <linux/list.h>
+#include <linux/version.h>
 #include "trustees.h"
 
 #define TRUSTEE_DEFAULT_MASK TRUSTEE_USE_UNIX_MASK
@@ -72,6 +73,12 @@ extern int trustees_process_command(const struct trustee_command __user *
 #define TS_DEBUG_MSG(...) printk(KERN_ERR "Trustees: " __VA_ARGS__)
 #else
 #define TS_DEBUG_MSG(...)
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
+#define NAMESPACE_SEM(_ns) (namespace_sem)
+#else
+#define NAMESPACE_SEM(_ns) ((_ns)->sem)
 #endif
 
 /*
