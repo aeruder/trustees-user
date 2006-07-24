@@ -316,7 +316,7 @@ static inline void add_capsule_to_trustee(struct trustee_hash_element *e,
 	capsule->permission = acl;
 
 	write_lock(&trustee_hash_lock);
-	list_add(&capsule->perm_list, &e->perm_list);
+	list_add_tail(&capsule->perm_list, &e->perm_list);
 	write_unlock(&trustee_hash_lock);
 }
 
