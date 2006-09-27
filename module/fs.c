@@ -23,14 +23,6 @@
 
 /* initialization code for the trustees filesystem */
 
-/* this code basically just sets up the superblock and registers the filesystem */
-static int trustees_fill_super(struct super_block *sb, void *data,
-			       int silent);
-static struct super_block *trustees_get_super(struct file_system_type *fst,
-					      int flags,
-					      const char *devname,
-					      void *data);
-
 /* File operations
  *
  * this is all the code for handling the file operations done on the few files
@@ -49,10 +41,11 @@ static ssize_t trustees_write_trustees(struct file *filp,
 				       size_t count, loff_t * offset);
 static int trustees_fill_super(struct super_block *sb, void *data,
 			       int silent);
-static struct super_block *trustees_get_super(struct file_system_type *fst,
+static int trustees_get_super(struct file_system_type *fst,
 					      int flags,
 					      const char *devname,
-					      void *data);
+					      void *data,
+					      struct vfsmount *);
 
 /* Various structs
  */
@@ -95,12 +88,13 @@ static int trustees_fill_super(struct super_block *sb, void *data,
 	return simple_fill_super(sb, TRUSTEES_MAGIC, trustees_files);
 }
 
-static struct super_block *trustees_get_super(struct file_system_type *fst,
+static int trustees_get_super(struct file_system_type *fst,
 					      int flags,
 					      const char *devname,
-					      void *data)
+					      void *data,
+					      struct vfsmount *mnt)
 {
-	return get_sb_single(fst, flags, data, trustees_fill_super);
+	return get_sb_single(fst, flags, data, trustees_fill_super, mnt);
 }
 
 int trustees_init_fs(void)
