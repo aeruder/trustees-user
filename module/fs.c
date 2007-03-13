@@ -36,6 +36,8 @@ static ssize_t trustees_write_bogus(struct file *filp,
 				    loff_t * offset);
 static ssize_t trustees_read_status(struct file *filp, char __user * buf,
 				    size_t count, loff_t * offset);
+static ssize_t trustees_read_apiversion(struct file *filp, char __user * buf,
+				    size_t count, loff_t * offset);
 static ssize_t trustees_write_trustees(struct file *filp,
 				       const char __user * buf,
 				       size_t count, loff_t * offset);
@@ -56,10 +58,16 @@ static struct file_system_type trustees_filesystem = {
 	.kill_sb = kill_litter_super,
 };
 
+static struct file_operations trustees_ops_apiversion = {
+	.open = trustees_open,
+	.read = trustees_read_apiversion,
+	.write = trustees_write_bogus,
+};
+
 static struct file_operations trustees_ops_status = {
 	.open = trustees_open,
 	.read = trustees_read_status,
-	.write = trustees_write_bogus,
+	.write = trustees_write_bogus
 };
 
 static struct file_operations trustees_ops_trustees = {
@@ -68,7 +76,7 @@ static struct file_operations trustees_ops_trustees = {
 	.write = trustees_write_trustees,
 };
 
-#define TRUSTEES_NUMBER_FILES 2
+#define TRUSTEES_NUMBER_FILES 3 
 struct tree_descr trustees_files[] = {
 	{NULL, NULL, 0},
 	{.name = "trustees",
@@ -78,6 +86,10 @@ struct tree_descr trustees_files[] = {
 	{.name = "status",
 	 .ops = &trustees_ops_status,
 	 .mode = S_IRUSR,
+	 },
+	{.name = "apiversion",
+	 .ops = &trustees_ops_apiversion,
+	 .mode = S_IRUSR | S_IRGRP | S_IROTH,
 	 },
 	{"", NULL, 0}
 };
@@ -155,6 +167,27 @@ static ssize_t trustees_read_status(struct file *filp, char __user * buf,
 	return count;
 }
 
+/* Function for handling reading of the apiversion. */
+static ssize_t trustees_read_apiversion(struct file *filp, char __user * buf,
+				    size_t count, loff_t * offset)
+{
+	static const char msg[] = TRUSTEES_APIVERSION_STR "\n";
+
+	unsigned long nocopy;
+
+	if (*offset >= (sizeof(msg) - 1)) {
+		return 0;
+	}
+
+	if (count > (sizeof(msg) - 1 - *offset)) {
+		count = sizeof(msg) - 1 - *offset;
+	}
+	nocopy = copy_to_user(buf, msg, count);
+	(*offset) += count;
+	(*offset) -= nocopy;
+
+	return count;
+}
 static ssize_t trustees_write_trustees(struct file *filp,
 				       const char __user * buf,
 				       size_t count, loff_t * offset)
