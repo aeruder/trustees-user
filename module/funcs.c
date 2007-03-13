@@ -450,7 +450,11 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 				for (j =
 				     hash(&trustee_hash[i].name) % newsize;
 				     n[j].usage; j = (j + 1) % newsize);
-				n[j] = trustee_hash[i];
+				n[j].usage = trustees_hash[i].usage;
+				n[j].name = trustee_hash[i].name;
+				INIT_LIST_HEAD(&(n[j].perm_list));
+				list_splice(&(trustee_hash[i].perm_list),
+				  &(new[j].perm_list));
 				trustee_hash_used++;
 			}
 		}
