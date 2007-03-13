@@ -426,7 +426,7 @@ static struct trustee_hash_element *getallocate_trustee_for_name
 		newsize =
 		    (trustee_hash_deleted * 3) >
 		    trustee_hash_size ? trustee_hash_size :
-		    trustee_hash_size * 2;
+		    trustee_hash_size + TRUSTEE_INITIAL_HASH_SIZE;
 
 		TS_DEBUG_MSG
 		    ("Rebuilding trustee hash, oldsize: %d, newsize %d, deleted %d\n",
