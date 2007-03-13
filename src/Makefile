@@ -1,7 +1,7 @@
 CFLAGS += -ggdb -I$(PWD)/../include -Wall
 LDFLAGS := 
 CC := gcc
-settrustees_objs := settrustees.o
+settrustees_objs := settrustees.o dynamic_array.o
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

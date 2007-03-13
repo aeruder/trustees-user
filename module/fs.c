@@ -15,6 +15,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#include <linux/vmalloc.h>
 #include <asm/atomic.h>
 #include <asm/uaccess.h>
 
@@ -41,6 +42,8 @@ static ssize_t trustees_read_apiversion(struct file *filp, char __user * buf,
 static ssize_t trustees_write_trustees(struct file *filp,
 				       const char __user * buf,
 				       size_t count, loff_t * offset);
+static int trustees_open_trustees(struct inode *inode, struct file *file);
+static int trustees_release_trustees(struct inode *inode, struct file *file);
 static int trustees_fill_super(struct super_block *sb, void *data,
 			       int silent);
 static int trustees_get_super(struct file_system_type *fst,
@@ -71,9 +74,10 @@ static struct file_operations trustees_ops_status = {
 };
 
 static struct file_operations trustees_ops_trustees = {
-	.open = trustees_open,
+	.open = trustees_open_trustees,
 	.read = trustees_read_bogus,
 	.write = trustees_write_trustees,
+	.release = trustees_release_trustees
 };
 
 #define TRUSTEES_NUMBER_FILES 3 
@@ -93,6 +97,14 @@ struct tree_descr trustees_files[] = {
 	 },
 	{"", NULL, 0}
 };
+
+struct trustee_command_reader {
+	struct trustee_command command;
+	unsigned curarg;
+	void *arg[TRUSTEE_MAX_ARGS];
+	size_t argsize[TRUSTEE_MAX_ARGS];
+};
+
 
 static int trustees_fill_super(struct super_block *sb, void *data,
 			       int silent)
@@ -127,10 +139,30 @@ static int trustees_open(struct inode *inode, struct file *filp)
 {
 	if (inode->i_ino < 1 || inode->i_ino > TRUSTEES_NUMBER_FILES)
 		return -ENODEV;
+
 	return 0;
 }
 
-#define TMPSIZE 20
+static int trustees_open_trustees(struct inode *inode, struct file *file)
+{
+	if (inode->i_ino < 1 || inode->i_ino > TRUSTEES_NUMBER_FILES)
+		return -ENODEV;
+
+	file->private_data = vmalloc(sizeof(struct trustee_command_reader));
+	if (!file->private_data)
+		return -ENOMEM;
+
+	memset(file->private_data, 0, sizeof(struct trustee_command_reader));
+
+	return 0;
+}
+
+static int trustees_release_trustees(struct inode *inode, struct file *file)
+{
+	vfree(file->private_data);
+	return 0;
+}
+
 /* Do a read on a bogus file.  Just return nothing :) */
 static ssize_t trustees_read_bogus(struct file *filp, char __user * buf,
 				   size_t count, loff_t * offset)
@@ -172,7 +204,6 @@ static ssize_t trustees_read_apiversion(struct file *filp, char __user * buf,
 				    size_t count, loff_t * offset)
 {
 	static const char msg[] = TRUSTEES_APIVERSION_STR "\n";
-
 	unsigned long nocopy;
 
 	if (*offset >= (sizeof(msg) - 1)) {
@@ -188,18 +219,66 @@ static ssize_t trustees_read_apiversion(struct file *filp, char __user * buf,
 
 	return count;
 }
+
+/* Cleanup our reader (deallocate all the allocated memory) */
+static void cleanup_reader(struct trustee_command_reader *reader) {
+	int z;
+	if (!reader) {
+		TS_DEBUG_MSG("How does reader disappear on us?\n");
+		return;
+	}
+
+	for (z = reader->curarg - 1; z >= 0; z--) {
+		vfree(reader->arg[z]);
+		reader->argsize[z] = 0;
+	}
+	reader->command.command = 0;
+	reader->curarg = 0;
+}
+
 static ssize_t trustees_write_trustees(struct file *filp,
 				       const char __user * buf,
 				       size_t count, loff_t * offset)
 {
-	if (count != sizeof(struct trustee_command)) {
-		return -EIO;
+	struct trustee_command_reader *reader = filp->private_data;
+
+	if (reader->command.command == 0) {
+		reader->curarg = 0;
+		if (count != sizeof(struct trustee_command)) {
+			return -EIO;
+		}
+		if (copy_from_user(&reader->command, buf, count)) {
+			reader->command.command = 0;
+			TS_DEBUG_MSG("copy_from_user failed on command\n");
+			return -EIO;
+		}
+		if (reader->command.numargs > TRUSTEE_MAX_ARGS) {
+			TS_DEBUG_MSG("Too many arguments specified for command %d\n",
+			  reader->command.command);
+			return -EIO;
+		}
+	} else {
+		unsigned curarg = reader->curarg;
+		if (!(reader->arg[curarg] = vmalloc(count+1))) {
+			cleanup_reader(reader);
+			return -EIO;
+		}
+		reader->argsize[curarg] = count;
+		((char *)reader->arg[curarg])[count] = '\0';
+		reader->curarg++;
+		if (copy_from_user(reader->arg[curarg], buf, count)) {
+			cleanup_reader(reader);
+			TS_DEBUG_MSG("copy_from_user failed on arg\n");
+			return -EIO;
+		}
 	}
 
-	if (!trustees_process_command
-	    ((const struct trustee_command __user *) buf)) {
-		return count;
+	if (reader->command.command && reader->curarg == reader->command.numargs) {
+		int ret = trustees_process_command(reader->command, reader->arg,
+		                                   reader->argsize);
+		cleanup_reader(reader);
+		if (ret) return -EIO;
 	}
 
-	return -EIO;
+	return count;
 }

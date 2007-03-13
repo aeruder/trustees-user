@@ -14,7 +14,6 @@
 
 #ifndef _LINUX_TRUSTEES_H
 #define _LINUX_TRUSTEES_H
-#include <linux/config.h>
 #include <linux/types.h>
 #include <linux/dcache.h>
 #include <linux/kdev_t.h>
@@ -61,8 +60,8 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 		 char *file_name, int unix_ret, int depth, int is_dir,
 		 struct trustee_hash_element **deepest);
 
-extern int trustees_process_command(const struct trustee_command __user *
-				    command);
+extern int trustees_process_command(struct trustee_command command,
+                                    void **arg, size_t *argsize);
 
 #define TRUSTEE_INITIAL_HASH_SIZE 32
 

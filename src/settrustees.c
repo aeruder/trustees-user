@@ -15,71 +15,164 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "trustees.h"
+#include "dynamic_array.h"
 
 char *trustee_device = NULL;
+FILE *trustee_file = NULL;
 char *trustee_config = "/etc/trustees.conf";
 
+typedef unsigned (*callbackptr)(struct trustee_command *, void **, unsigned *);
 struct dev_desc {
 	char *devname;
-	dev_t dev;
+	uint32_t dev;
 	struct dev_desc *next;
 };
 
-struct dev_desc *ic_list = NULL;
+unsigned parse_permission_line(const char *line, callbackptr callback);
+unsigned parse_device_characteristic(const char *line, callbackptr callback);
+char *extract_to_delimiter(const char *s, char end, char **result);
+char *extract_dev(const char *s, struct dev_desc *desc);
+char *determine_trustees_mount(void);
+unsigned add_trustee(struct dev_desc *dev, const char *path, const char *perm,
+ const char *user, callbackptr callback);
+void add_ic_device(struct dev_desc *dev, callbackptr callback);
 
-int compare_devs(struct dev_desc *dev1, struct dev_desc *dev2)
-{
-	if (dev1->dev && dev2->dev)
-		return (dev1 == dev2);
+/* Read a line from file, the return result is only good until the next call to read_line
+ */
+char *read_line(FILE *file) {
+	static char *buffer = NULL;
+	static unsigned len  = 0;
+	static const unsigned buf_ad = 32000;
 
-	if (!dev1->dev && !dev2->dev)
-		return (strcmp(dev1->devname, dev2->devname) == 0);
+	unsigned offset = 0;
 
-	return 0;
-}
-
-void add_ic_dev(struct dev_desc *dev1)
-{
-	struct dev_desc *newdev;
-
-	newdev = malloc(sizeof(struct dev_desc));
-	if (!newdev) {
-		printf("Couldn't malloc in add_ic_dev: %s\n",
-		       strerror(errno));
-		exit(-1);
+	if (!buffer) {
+		len = buf_ad;
+		buffer = malloc(buf_ad);
 	}
+	offset = 0;
+	do {
+		int strl;
+		if (!fgets(buffer + offset, len - offset, file)) return NULL;
 
-	newdev->devname = strdup(dev1->devname);
-	newdev->dev = dev1->dev;
-	newdev->next = ic_list;
-	ic_list = newdev;
+		strl = strlen(buffer);
+		if (buffer[strl - 1] == '\n') {
+			buffer[strl - 1] = '\0';
+			return buffer;
+		} else if (strl == len - 1) {
+			offset = len - 1;
+			len += buf_ad;
+			buffer = realloc(buffer, len);
+		} else {
+			fprintf(stderr, "I'm confused what just happened in fgets!\n");
+			break;
+		}
+	} while(1);
+
+	return NULL;
 }
 
-int is_ic_dev(struct dev_desc *dev1)
-{
-	struct dev_desc *iter;
+/* Parse a single line from the file, calling the provided callback with the arguments
+ * to print out to the trustees device if anything should succeed.
+ *
+ * Returns 0 if it was unsuccessful at parsing
+ */
+unsigned parse_line(FILE *file, callbackptr callback) {
+	const char *line;
 
-	for (iter = ic_list; (iter); iter = iter->next) {
-		if (compare_devs(iter, dev1))
+	line = read_line(file);
+	if (!line) return 1;
+
+	switch(line[0]) {
+		case '\0':
+		case '#':
 			return 1;
+		case '{':
+		case '[':
+			return parse_permission_line(line, callback);
+		case '*':
+			return parse_device_characteristic(line, callback);
+		default:
+			break;
 	}
 
 	return 0;
 }
 
-char *extract_to_delimiter(char *s, char end, char **result)
+unsigned parse_permission_line(const char *line, callbackptr callback)
+{
+	struct dev_desc device;
+	char *path, *perms, *user;
+
+	// Extract device
+	line = extract_dev(line, &device);
+	if (!line) return 0;
+
+	// Extract directory/file
+	line = extract_to_delimiter(line, ':', &path);
+	if (!line) {
+		fprintf(stderr, "No user/group and permission pairs\n");
+		return 0;
+	}
+
+	// Extract user/group and perm pairs
+	while (line) {
+		line = extract_to_delimiter(line, ':', &user);
+		if (!line) {
+			fprintf(stderr, "Found user '%s', but no permission mask\n", user);
+			return 0;
+		}
+		line = extract_to_delimiter(line, ':', &perms);
+		add_trustee(&device, path, perms, user, callback);
+		free(user);
+		free(perms);
+	}
+	free(path);
+
+	if (device.devname) free(device.devname);
+
+	return 1;
+}
+
+unsigned parse_device_characteristic(const char *line, callbackptr callback)
+{
+	struct dev_desc device;
+
+	// Extract device
+	line = extract_dev(line+1, &device);
+	if (!line) return 0;
+
+	for (; *line; line++) {
+		switch(*line) {
+			case 'I': {
+				add_ic_device(&device, callback);
+				break;
+			}
+			default:
+				fprintf(stderr, "Unknown flag '%c'\n", *line);
+				return 0;
+		}
+	}
+
+	if (device.devname) free(device.devname);
+
+	return 1;
+}
+
+char *extract_to_delimiter(const char *s, char end, char **result)
 {
 	char *res;
-	char *origs = s;
+	const char *origs = s;
 
 	for (; *s && *s != end; s++);
 
 	res = malloc(s - origs + 1);
 	if (!res) {
-		printf
-		    ("Problem mallocing mem in extract_between_delimiters: %s\n",
+		fprintf
+		    (stderr, "Problem mallocing mem in extract_between_delimiters: %s\n",
 		     strerror(errno));
 		exit(-1);
 	}
@@ -90,10 +183,10 @@ char *extract_to_delimiter(char *s, char end, char **result)
 	if (result)
 		*result = res;
 
-	return (*s) ? (s + 1) : NULL;
+	return (*s) ? (char *)(s + 1) : NULL;
 }
 
-char *extract_dev(char *s, struct dev_desc *desc)
+char *extract_dev(const char *s, struct dev_desc *desc)
 {
 	char *device;
 
@@ -110,13 +203,13 @@ char *extract_dev(char *s, struct dev_desc *desc)
 			struct stat st;
 
 			if (stat(device, &st)) {
-				printf("Could not find device %s\n",
+				fprintf(stderr, "Could not find device %s\n",
 				       device);
 				return NULL;
 			}
 			if (!S_ISBLK(st.st_mode)) {
-				printf
-				    ("%s is not a block device, skipped\n",
+				fprintf
+				    (stderr, "%s is not a block device, skipped\n",
 				     device);
 				return NULL;
 			}
@@ -133,57 +226,38 @@ char *extract_dev(char *s, struct dev_desc *desc)
 		desc->devname = NULL;
 	}
 
-	return s;
+	return (char *)s;
 }
 
-
-int set_trustee(const struct trustee_command *command)
+unsigned determine_trustees_apiversion(const char *mount)
 {
-	int fd;
-	int ret;
+	char buffer[strlen(mount) + 50];
+	FILE *file;
+	char *line = NULL;
 
-	fd = open(trustee_device, O_WRONLY);
+	strcpy(buffer, mount);
+	strcat(buffer, "/apiversion");
 
-	if (fd < 0)
-		return errno;
-
-	ret = write(fd, command, sizeof(struct trustee_command));
-	if (ret != sizeof(struct trustee_command))
-		return errno;
-
-	close(fd);
-
+	file = fopen(buffer, "r");
+	if (file)
+		line = read_line(file);
+	if (line)
+		return strtol(line, 0, 0);
 	return 0;
 }
 
 char *determine_trustees_mount(void)
 {
 	FILE *file;
-	char x[10000];
-	char *device;
-	char *mount;
-	char *fstype;
-	char *options;
-	char *num1;
-	char *num2;
+	char *line, *device, *mount, *fstype, *options, *num1, *num2;
 
-	file = fopen("/etc/mtab", "r");
+	file = fopen("/proc/mounts", "r");
 
 	if (!file)
 		return NULL;
 
-	x[9999] = '\0';
-	while (fgets(x, 9999, file)) {
-		if (strlen(x) == 9999) {
-			int j;
-			fprintf(stderr,
-				"Error parsing mtab, line too long!\n");
-			while (((j = fgetc(file)) != '\n')
-			       && (j != EOF));
-			continue;
-		}
-
-		device = strtok(x, " ");
+	while ((line = read_line(file))) {
+		device = strtok(line, " ");
 		mount = strtok(NULL, " ");
 		fstype = strtok(NULL, " ");
 		options = strtok(NULL, " ");
@@ -196,221 +270,16 @@ char *determine_trustees_mount(void)
 		}
 
 		if (strcmp(fstype, "trusteesfs") == 0) {
+			fclose(file);
 			return strdup(mount);
 		}
 	}
+	fclose(file);
 
 	return NULL;
 }
 
-void handle_dev_line(char *s, int line)
-{
-	struct dev_desc dev_desc;
-	struct trustee_command command;
-
-	if (*s != '*')
-		return;
-
-	s = extract_dev(s + 1, &dev_desc);
-	if (!s) {
-		printf("Problem parsing dev_line on line no. %d\n", line);
-		if (dev_desc.devname)
-			free(dev_desc.devname);
-		return;
-	}
-
-	command.dev = dev_desc.dev;
-	command.devname = dev_desc.devname;
-
-	for (; *s; s++) {
-		command.command = 0;
-
-		switch (*s) {
-		case 'I':
-			add_ic_dev(&dev_desc);
-			command.command = TRUSTEE_COMMAND_MAKE_IC;
-			break;
-		default:
-			printf
-			    ("Unrecognized device flag '%c' on line %d\n",
-			     *s, line);
-		}
-
-		if (command.command) {
-			int r;
-			r = set_trustee(&command);
-			if (r) {
-				printf
-				    ("Can't set trustee for %s, reason: %s\n",
-				     command.filename, strerror(r));
-				exit(-1);
-			}
-		}
-	}
-
-	return;
-}
-
-void handle_reg_line(char *s, int line)
-{
-	int r, isgroup;
-	struct trustee_command command;
-	char *maskstr, *uidstr, *path;
-	int icdev = 0;
-	struct dev_desc dev_desc;
-	char *iter;
-
-/* Grab the device */
-	s = extract_dev(s, &dev_desc);
-
-	if (!s) {
-		printf("Problem parsing device on line no. %d\n", line);
-		if (dev_desc.devname)
-			free(dev_desc.devname);
-		return;
-	}
-
-	command.devname = dev_desc.devname;
-	command.dev = dev_desc.dev;
-	icdev = is_ic_dev(&dev_desc);
-
-/* Grab the path */
-	s = extract_to_delimiter(s, ':', &path);
-
-	if (!s) {
-		printf("Problem parsing path on line no. %d\n", line);
-		free(dev_desc.devname);
-		free(path);
-		return;
-	}
-
-	if (icdev) {
-		char *t;
-		for (t = path; *t; t++) {
-			if ((*t >= 'A') && (*t <= 'Z'))
-				(*t) += 'a' - 'A';
-		}
-	}
-
-	command.filename = path;
-
-	while (s && *s) {
-		command.permission.mask = 0;
-		command.permission.u.uid = command.permission.u.gid = 0;
-		command.command = TRUSTEE_COMMAND_ADD;
-
-		uidstr = maskstr = NULL;
-
-		s = extract_to_delimiter(s, ':', &uidstr);
-		if (s)
-			s = extract_to_delimiter(s, ':', &maskstr);
-
-		if (!s && !maskstr) {
-			printf
-			    ("Problems parsing name/mask pair on line %d\n",
-			     line);
-			free(command.filename);
-			free(command.devname);
-			if (uidstr)
-				free(uidstr);
-			return;
-		}
-
-		isgroup = 0;
-		if (uidstr[0] == '+') {
-			isgroup = 1;
-			memmove(uidstr, uidstr + 1, strlen(uidstr));
-		}
-
-		if (isgroup) {
-			struct group *grp = getgrnam(uidstr);
-			if (!grp) {
-				printf("Invalid group %s on line %d\n",
-				       uidstr, line);
-				continue;
-			}
-			command.permission.u.gid = grp->gr_gid;
-			command.permission.mask |= TRUSTEE_IS_GROUP_MASK;
-		} else {
-			struct passwd *pwd;
-			if (uidstr[0] == '*') {
-				command.permission.mask +=
-				    TRUSTEE_ALL_MASK;
-			} else {
-				pwd = getpwnam(uidstr);
-				if (!pwd) {
-					printf
-					    ("Invalid uid %s on line %d, continuing...\n",
-					     uidstr, line);
-					continue;
-				}
-				command.permission.u.uid = pwd->pw_uid;
-			}
-		}
-
-		for (iter = maskstr; *iter; iter++) {
-			switch (*iter) {
-			case 'D':
-				command.permission.mask |=
-				    TRUSTEE_ALLOW_DENY_MASK;
-				break;
-			case 'C':
-				command.permission.mask |=
-				    TRUSTEE_CLEAR_SET_MASK;
-				break;
-			case 'R':
-				command.permission.mask |=
-				    TRUSTEE_READ_MASK;
-				break;
-			case 'W':
-				command.permission.mask |=
-				    TRUSTEE_WRITE_MASK;
-				break;
-			case 'B':
-				command.permission.mask |=
-				    TRUSTEE_BROWSE_MASK;
-				break;
-			case 'E':
-				command.permission.mask |=
-				    TRUSTEE_READ_DIR_MASK;
-				break;
-			case 'U':
-				command.permission.mask |=
-				    TRUSTEE_USE_UNIX_MASK;
-				break;
-			case 'X':
-				command.permission.mask |=
-				    TRUSTEE_EXECUTE_MASK;
-				break;
-			case '!':
-				command.permission.mask |=
-				    TRUSTEE_NOT_MASK;
-				break;
-			case 'O':
-				command.permission.mask |=
-				    TRUSTEE_ONE_LEVEL_MASK;
-				break;
-			default:
-				printf("Ilegal mask '%c' on line %d\n",
-				       *iter, line);
-			}
-		}
-		r = set_trustee(&command);
-		if (r) {
-			printf("Can't set trustee for %s, reason: %s\n",
-			       command.filename, strerror(r));
-			exit(-1);
-		}
-		free(maskstr);
-		free(uidstr);
-	}
-
-	free(command.filename);
-	free(command.devname);
-}
-
-
-void print_exit(void)
+void print_help_and_exit(void)
 {
 	printf("Usage: settrustees <options>\n");
 	printf("Options:\n");
@@ -426,47 +295,176 @@ void print_exit(void)
 	printf("       the config file\n");
 	printf("    -t <trustees device file>\n");
 	printf
-	    ("       Specify the 'trustees' file from the mounted trusteefs fs\n");
+	    ("       Specify the root of the mounted trusteesfs filesystem\n");
 	printf("       This can often be automatically detected: %s\n",
 	       trustee_device);
 	printf("\n");
 	exit(-1);
 }
 
-
-int main(int argc, char *argv[])
+int send_trustees_command(struct trustee_command *comm, void **args, unsigned *lens)
 {
-	int i, j, r;
-	int flush = 1, exitafterflush = 0;
-	FILE *f;
-	char name[PATH_MAX + NAME_MAX] = "";
-	char devname[PATH_MAX + NAME_MAX];
-	struct trustee_command command;
-	char s[32000];
-	int line, pass;
+	int fd = fileno(trustee_file);
+	int x;
+	if (!comm) {
+		fprintf(stderr, "send_trustees_command: not called correctly!\n");
+		return 0;
+	}
+	if (write(fd, comm, sizeof(struct trustee_command)) == -1) {
+		fprintf(stderr, "send_trustees_command: couldn't send command\n");
+		return 0;
+	}
 
-	command.filename = name;
-	command.devname = devname;
+	for (x = 0; x < comm->numargs; x++) {
+		if (write(fd, args[x], lens[x]) == -1) {
+			fprintf(stderr, "send_trustees_command: couldn't send argument #%d\n", x);
+			return 0;
+		}
+	}
+	return 1;
+}
+
+void flush_trustees(void)
+{
+	struct trustee_command flush = { 
+	   .command = TRUSTEE_COMMAND_REMOVE_ALL,
+	   .numargs = 0
+	};
+
+	if (!send_trustees_command(&flush, 0, 0)) {
+		fprintf(stderr, "flush_trustees failed\n");
+		exit(-1);
+	}
+}
+
+unsigned callback_ignore_commands(struct trustee_command *comm, void **args, unsigned *lens)
+{
+	return 1;
+}
+
+unsigned callback_only_device_characteristics(struct trustee_command *comm, void **args, unsigned *lens)
+{
+	if (comm->command != TRUSTEE_COMMAND_MAKE_IC) return 1;
+
+	return send_trustees_command(comm, args, lens);
+}
+
+unsigned callback_only_permissions(struct trustee_command *comm, void **args, unsigned *lens)
+{
+	if (comm->command != TRUSTEE_COMMAND_ADD) return 1;
+
+	return send_trustees_command(comm, args, lens);
+}
+
+unsigned add_mask_string(const char *mstr, trustee_acl *mask)
+{
+	static struct {
+		char identifier;
+		uint32_t value;
+	} mask_table[] = {
+		{ 'D', TRUSTEE_ALLOW_DENY_MASK },
+		{ 'C', TRUSTEE_CLEAR_SET_MASK },
+		{ 'R', TRUSTEE_READ_MASK },
+		{ 'W', TRUSTEE_WRITE_MASK },
+		{ 'B', TRUSTEE_BROWSE_MASK },
+		{ 'E', TRUSTEE_READ_DIR_MASK },
+		{ 'U', TRUSTEE_USE_UNIX_MASK },
+		{ 'X', TRUSTEE_EXECUTE_MASK },
+		{ '!', TRUSTEE_NOT_MASK },
+		{ 'O', TRUSTEE_ONE_LEVEL_MASK },
+		{ '\0', 0 }
+	};
+	int j;
+
+	for (; *mstr; mstr++) {
+		for (j = 0; mask_table[j].identifier; j++) {
+			if (mask_table[j].identifier == *mstr) {
+				*mask |= mask_table[j].value;
+				break;
+			}
+		}
+		if (!mask_table[j].identifier) {
+			fprintf(stderr, "Ilegal mask character '%c'\n", *mstr);
+			return 0;
+		}
+	}
+	return 1;
+}
+
+unsigned add_trustee(struct dev_desc *dev, const char *path, const char *mstr,
+ const char *user, callbackptr callback)
+{
+	struct trustee_command comm = { 
+		.command = TRUSTEE_COMMAND_ADD, 
+		.numargs = 4
+	};
+	struct trustee_permission perm = { 0 };
+	dynarray *args = dynarray_init(5);
+
+	if (*user == '+') {
+		struct group *grp = getgrnam(user+1);
+		if (!grp) {
+			fprintf(stderr, "Problem looking up group '%s'\n", user+1);
+			return 0;
+		}
+		perm.u.gid = grp->gr_gid;
+		perm.mask |= TRUSTEE_IS_GROUP_MASK;
+	} else if (!strcmp(user, "*")) {
+		perm.mask |= TRUSTEE_ALL_MASK;
+	} else {
+		struct passwd *pwd;
+		pwd = getpwnam(user);
+		if (!pwd) {
+			fprintf(stderr, "Problem looking up user '%s'\n", user);
+			return 0;
+		}
+		perm.u.uid = pwd->pw_uid;
+	}
+
+	if (!add_mask_string(mstr, &(perm.mask))) return 0;
+
+	dynarray_push(args, path, strlen(path));
+	dynarray_push(args, &perm, sizeof(perm));
+	dynarray_push(args, dev->devname, strlen(dev->devname));
+	dynarray_push(args, &dev->dev, sizeof(dev->dev));
+
+	callback(&comm, args->items, args->lengths);
+	dynarray_free(args);
+
+	return 1;
+}
+
+void add_ic_device(struct dev_desc *dev, callbackptr callback)
+{
+	struct trustee_command comm = { 
+		.command = TRUSTEE_COMMAND_MAKE_IC, 
+		.numargs = 2 
+	};
+	dynarray *args = dynarray_init(5);
+
+	dynarray_push(args, dev->devname, strlen(dev->devname));
+	dynarray_push(args, &dev->dev, sizeof(dev->dev));
+
+	callback(&comm, args->items, args->lengths);
+	dynarray_free(args);
+}
+
+
+int main(int argc, char **argv) 
+{
+	char j;
+	int pass;
+	unsigned flush = 1, exitafterflush = 0;
+	unsigned apiversion;
+	FILE *config = NULL;
 
 	trustee_device = determine_trustees_mount();
-	if (trustee_device) {
-		char *new;
-		new =
-		    realloc(trustee_device, strlen(trustee_device) + 100);
-		if (!new) {
-			printf
-			    ("It seems we ran out of memory... bailing...\n");
-			exit(-1);
-		}
-		trustee_device = new;
-		strcat(trustee_device, "/trustees");
-	}
 
 	while ((j = getopt(argc, argv, "t:f:nhDp:")) != EOF) {
 		switch (j) {
 		case 'h':
 		case '?':
-			print_exit();
+			print_help_and_exit();
 		case 'n':
 			flush = 0;
 			break;
@@ -484,98 +482,91 @@ int main(int argc, char *argv[])
 	}
 
 	if (!trustee_device) {
-		printf
-		    ("Couldn't determine where the trusteesfs was mounted.  You need to\n");
-		printf
-		    ("do something like 'mount -t trusteesfs none /place/to/mount' and\n");
-		printf
-		    ("run again.  It is possible the mount point could just not be determined\n");
-		printf
-		    ("in which case you should specify it with the -t option.\n");
+		fprintf
+		    (stderr, "Couldn't determine where the trusteesfs was mounted.  You need to\n");
+		fprintf
+		    (stderr, "do something like 'mount -t trusteesfs none /place/to/mount' and\n");
+		fprintf
+		    (stderr, "run again.  It is possible the mount point could just not be determined\n");
+		fprintf
+		    (stderr, "in which case you should specify it with the -t option.\n");
 		exit(-1);
 	}
 
+	apiversion = determine_trustees_apiversion(trustee_device);
+	fprintf(stderr, "Kernel API version: %u\nsettrustees API version: %u\n", apiversion, TRUSTEES_APIVERSION);
 
-	f = fopen(trustee_device, "w");
-	if (f == NULL) {
-		printf
-		    ("Could not open the trustees device for opening: %s\n",
+	if (apiversion < TRUSTEES_APIVERSION) {
+		fprintf(stderr, "ERROR: You must upgrade your kernel trustees module.\n");
+		exit(-1);
+	} else if (apiversion > TRUSTEES_APIVERSION) {
+		fprintf(stderr, "ERROR: You must upgrade your settrustees executable.\n");
+		exit(-1);
+	}	
+
+	trustee_device = realloc(trustee_device, strlen(trustee_device) + 50);
+	strcat(trustee_device, "/trustees");
+
+	trustee_file = fopen(trustee_device, "w");
+	if (!trustee_file) {
+		fprintf
+		    (stderr, "Could not open the trustees device for opening: %s\n",
 		     trustee_device);
-		printf("The error was %s\n", strerror(errno));
+		fprintf(stderr, "The error was %s\n", strerror(errno));
 		exit(-1);
 	}
 
 	if (!exitafterflush) {
 		if (strcmp(trustee_config, "-") == 0) {
-			f = stdin;
+			config = stdin;
 		} else {
-			f = fopen(trustee_config, "r");
-			if (!f) {
-				printf
-				    ("Could not read config file %s, reason %s\n",
+			config = fopen(trustee_config, "r");
+			if (!config) {
+				fprintf
+				    (stderr, "Could not read config file %s, reason %s\n",
 				     trustee_config, strerror(errno));
 				exit(-1);
 			}
 		}
 	}
 
-	if (flush) {
-		command.command = TRUSTEE_COMMAND_REMOVE_ALL;
-		r = set_trustee(&command);
-		if (r) {
-			printf("Can't set trustee for %s, reason: %s\n",
-			       command.filename, strerror(r));
-			exit(-1);
-		}
-	}
+	if (flush)
+		flush_trustees();
 
 	if (exitafterflush)
 		exit(0);
 
+	for (pass = 0; pass < 3; pass++) {
+		unsigned line = 0;
+		callbackptr callback;
 
-	s[31999] = '\0';
-	line = 0;
-	pass = 0;
-	while (pass < 3) {
-		while (fgets(s, 31999, f) != NULL) {
+		switch(pass) {
+			case 0:
+				fprintf(stderr, "Pass 1: Checking for parse errors\n");
+				callback = callback_ignore_commands;
+				break;
+			case 1:
+				fprintf(stderr, "Pass 2: Sending device modifiers\n");
+				callback = callback_only_device_characteristics;
+				break;
+			case 2:
+				fprintf(stderr, "Pass 3: Sending permissions\n");
+				callback = callback_only_permissions;
+				break;
+		}
+		while (!feof(config)) {
 			line++;
-			i = strlen(s);
-			if (i == 31999) {	/* handle lines longer than 31999 characters */
-				printf
-				    ("Warning skipping line longer than 31999 characters!\n");
-				while (((j = fgetc(f)) != '\n')
-				       && (j != EOF));
-				continue;
-			}
-			if (i == 0)
-				continue;
-			if (s[0] == '#')
-				continue;
-			if (s[i - 1] == '\n')
-				s[i - 1] = 0;
-			if (strlen(s) == 0)
-				continue;
-			if (s[0] == '*') {
-				if (pass == 1)
-					handle_dev_line(s, line);
-				continue;
-			}
-			if ((s[0] == '{') || (s[0] == '[')) {
-				if (pass == 2)
-					handle_reg_line(s, line);
-				continue;
-			}
-
-			if (pass == 0) {
-				printf("Garbled input on line %d\n", line);
+			if (!parse_line(config, callback)) {
+				fprintf(stderr, "Parse error %s:%u\n", trustee_config, line);
 				exit(-1);
 			}
 		}
-		rewind(f);
-		pass++;
+		rewind(config);
 	}
 
-	fclose(f);
+	fclose(config);
+	fclose(trustee_file);
 
 	return 0;
 }
+

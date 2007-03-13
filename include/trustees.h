@@ -66,17 +66,43 @@ struct trustee_permission {
 #endif
 
 struct trustee_command {
-	int command;
-	struct trustee_permission permission;
-	long dev;
-	char __user *filename;
-	char __user *devname;
+	unsigned command;
+	unsigned numargs;
 };
 
-#define TRUSTEE_COMMAND_ADD 1
-#define TRUSTEE_COMMAND_REPLACE 2
-#define TRUSTEE_COMMAND_REMOVE_ALL 3
-#define TRUSTEE_COMMAND_REMOVE 4
+/* Most arguments that any command will take */
+
+#define TRUSTEE_MAX_ARGS 6
+
+/* Starts a table 
+ * No arguments 
+ */
+#define TRUSTEE_COMMAND_TABLE_START 1 
+
+/* Ends a table successfully.
+ * No arguments 
+ */
+#define TRUSTEE_COMMAND_TABLE_STOP  2
+
+/* Adds a trustee
+ * Arguments:
+ * filename (char [])
+ * struct trustee_permission
+ * device-name (char [])
+ * device number (u32)
+ */
+#define TRUSTEE_COMMAND_ADD 3
+
+/* Removes all trustees 
+ * No arguments 
+ */
+#define TRUSTEE_COMMAND_REMOVE_ALL  2
+
+/* Makes a filesystem ignorecase
+ * Arguments:
+ * device-name (char [])
+ * device number (u32)
+ */
 #define TRUSTEE_COMMAND_MAKE_IC 5
 
 #endif /* _LINUX_TRUSTEE_STRUCT_H */
