@@ -36,7 +36,8 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/smp_lock.h>
-#include <linux/namespace.h>
+#include <linux/nsproxy.h>
+#include <linux/mnt_namespace.h>
 
 #include "trustees_private.h"
 
@@ -85,7 +86,7 @@ static inline int has_unix_perm(struct inode *inode, int mask)
 static inline struct vfsmount *find_inode_mnt(struct inode *inode,
 					      struct nameidata *nd)
 {
-	struct namespace *ns;
+	struct mnt_namespace *ns = NULL;
 	struct vfsmount *mnt = NULL;
 
 	if (likely(nd))
@@ -94,8 +95,15 @@ static inline struct vfsmount *find_inode_mnt(struct inode *inode,
 	/* Okay, we need to find the vfsmount by looking
 	 * at the namespace now.
 	 */
-	down_read(&NAMESPACE_SEM(current->namespace));
-	ns = current->namespace;
+	task_lock(current);
+	if (current->nsproxy) {
+		ns = current->nsproxy->mnt_ns;
+		if (ns)
+			get_mnt_ns(ns);
+	}
+	task_unlock(current);
+
+	if (!ns) return NULL;
 
 	list_for_each_entry(mnt, &ns->list, mnt_list) {
 		if (mnt->mnt_sb == inode->i_sb) {
@@ -105,7 +113,7 @@ static inline struct vfsmount *find_inode_mnt(struct inode *inode,
 	}
 
   out:
-	up_read(&NAMESPACE_SEM(ns));
+	put_mnt_ns(ns);
 
 	return mnt;
 }
