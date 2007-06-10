@@ -28,8 +28,7 @@
 #include <linux/vmalloc.h>
 #include <linux/ctype.h>
 
-#include "trustees.h"
-#include "trustees_private.h"
+#include "internal.h"
 
 /*
  * This is a hash of all the trustee_names currently added.  These values

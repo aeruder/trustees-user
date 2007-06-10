@@ -19,7 +19,7 @@
 #include <asm/atomic.h>
 #include <asm/uaccess.h>
 
-#include "trustees_private.h"
+#include "internal.h"
 
 
 /* initialization code for the trustees filesystem */

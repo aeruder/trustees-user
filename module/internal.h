@@ -19,7 +19,7 @@
 #include <linux/kdev_t.h>
 #include <linux/list.h>
 #include <linux/version.h>
-#include "trustees.h"
+#include <linux/trustees.h>
 
 #define TRUSTEE_DEFAULT_MASK TRUSTEE_USE_UNIX_MASK
 

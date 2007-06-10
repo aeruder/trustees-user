@@ -39,7 +39,7 @@
 #include <linux/nsproxy.h>
 #include <linux/mnt_namespace.h>
 
-#include "trustees_private.h"
+#include "internal.h"
 
 static int trustees_capable(struct task_struct *tsk, int cap);
 static int trustees_inode_permission(struct inode *inode,
