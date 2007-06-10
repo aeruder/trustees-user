@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
+#include <linux/security.h>
 #include <asm/atomic.h>
 #include <asm/uaccess.h>
 
@@ -44,22 +45,9 @@ static ssize_t trustees_write_trustees(struct file *filp,
 				       size_t count, loff_t * offset);
 static int trustees_open_trustees(struct inode *inode, struct file *file);
 static int trustees_release_trustees(struct inode *inode, struct file *file);
-static int trustees_fill_super(struct super_block *sb, void *data,
-			       int silent);
-static int trustees_get_super(struct file_system_type *fst,
-					      int flags,
-					      const char *devname,
-					      void *data,
-					      struct vfsmount *);
 
 /* Various structs
  */
-static struct file_system_type trustees_filesystem = {
-	.owner = THIS_MODULE,
-	.name = "trusteesfs",
-	.get_sb = trustees_get_super,
-	.kill_sb = kill_litter_super,
-};
 
 static struct file_operations trustees_ops_apiversion = {
 	.open = trustees_open,
@@ -80,22 +68,28 @@ static struct file_operations trustees_ops_trustees = {
 	.release = trustees_release_trustees
 };
 
-#define TRUSTEES_NUMBER_FILES 3
-struct tree_descr trustees_files[] = {
-	{NULL, NULL, 0},
-	{.name = "trustees",
-	 .ops = &trustees_ops_trustees,
+static struct trustees_file_info {
+	const char *name;
+	struct file_operations *fops;
+	int mode;
+	struct dentry *dentry;
+} trustees_files[] = {
+	{.name = "device",
+	 .fops = &trustees_ops_trustees,
 	 .mode = S_IWUSR,
+	 .dentry = 0
 	 },
 	{.name = "status",
-	 .ops = &trustees_ops_status,
+	 .fops = &trustees_ops_status,
 	 .mode = S_IRUSR,
+	 .dentry = 0
 	 },
 	{.name = "apiversion",
-	 .ops = &trustees_ops_apiversion,
+	 .fops = &trustees_ops_apiversion,
 	 .mode = S_IRUSR | S_IRGRP | S_IROTH,
+	 .dentry = 0
 	 },
-	{"", NULL, 0}
+	{"", NULL, 0, 0}
 };
 
 struct trustee_command_reader {
@@ -106,29 +100,30 @@ struct trustee_command_reader {
 };
 
 
-static int trustees_fill_super(struct super_block *sb, void *data,
-			       int silent)
-{
-	return simple_fill_super(sb, TRUSTEES_MAGIC, trustees_files);
-}
-
-static int trustees_get_super(struct file_system_type *fst,
-					      int flags,
-					      const char *devname,
-					      void *data,
-					      struct vfsmount *mnt)
-{
-	return get_sb_single(fst, flags, data, trustees_fill_super, mnt);
-}
+static struct dentry *toplevel = NULL;
 
 int trustees_init_fs(void)
 {
-	return register_filesystem(&trustees_filesystem);
+	struct trustees_file_info *iter;
+	toplevel = securityfs_create_dir("trustees", NULL);
+	if (!toplevel) trustees_deinit_fs();
+	for (iter = trustees_files; iter->fops && toplevel; iter++) {
+		iter->dentry = securityfs_create_file(
+		   iter->name, iter->mode, toplevel, NULL, iter->fops);
+		if (!iter->dentry) trustees_deinit_fs();
+	}
+	return !toplevel;
 }
 
 void trustees_deinit_fs(void)
 {
-	unregister_filesystem(&trustees_filesystem);
+	struct trustees_file_info *iter;
+	for (iter = trustees_files; iter->fops; iter++) {
+		securityfs_remove(iter->dentry);
+		iter->dentry = NULL;
+	}
+	securityfs_remove(toplevel);
+	toplevel = NULL;
 }
 
 /*
@@ -137,17 +132,11 @@ void trustees_deinit_fs(void)
 
 static int trustees_open(struct inode *inode, struct file *filp)
 {
-	if (inode->i_ino < 1 || inode->i_ino > TRUSTEES_NUMBER_FILES)
-		return -ENODEV;
-
 	return 0;
 }
 
 static int trustees_open_trustees(struct inode *inode, struct file *file)
 {
-	if (inode->i_ino < 1 || inode->i_ino > TRUSTEES_NUMBER_FILES)
-		return -ENODEV;
-
 	file->private_data = vmalloc(sizeof(struct trustee_command_reader));
 	if (!file->private_data)
 		return -ENOMEM;

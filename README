@@ -188,11 +188,11 @@ First, you should load the kernel module.  modprobe trustees.ko should do the
 trick.
 
 For the settrustees program to communicate with the kernel module a virtual
-filesystem must be mounted.
+filesystem must be mounted (securityfs):
 
-mount -t trusteesfs none /some/place/to/mount
+mount -t securityfs none /sys/kernel/security
 
-This filesystem will have a file called 'trustees' which is the file actually
+This filesystem will have a file called 'device' which is the file actually
 used to communicate directly with the kernel module.  This is referred to as
 the 'trustees device'.  Other files available in the filesystem may be
 available to check status of the trustees module, statistics, or to turn
@@ -200,11 +200,6 @@ debugging messages on.
 
 Now we use settrustees to load the config file into the kernel module.  
 	/path/to/settrustees -f /path/to/config
-It should automatically parse /etc/mtab and find where the trusteesfs is
-mounted.  If not, use the -t option to specify the 'trustees device'.
-
-Please note that in order to unload the kernel module, the virtual filesystem
-must first be unmounted.
 
 ======
 V. Known Issues/Bugs/"Features"

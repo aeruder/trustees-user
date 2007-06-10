@@ -1,0 +1,9 @@
+June 10, 2007:
+    Bumped for kernel 2.6.21, this is now required for trustees.   In the
+    future, multiple stable kernel revisions will be supported.
+
+    trusteesfs was removed in favor of securityfs which is already
+    in the kernel.  You should mount -t securityfs none /sys/kernel/security
+    upon boot.  In the future, most security modules should be using
+    this interface.  It is no longer necessary to unmount this to remove
+    the trustees module and it can be mounted prior to loading trustees.

@@ -35,7 +35,7 @@ unsigned parse_permission_line(const char *line, callbackptr callback);
 unsigned parse_device_characteristic(const char *line, callbackptr callback);
 char *extract_to_delimiter(const char *s, char end, char **result);
 char *extract_dev(const char *s, struct dev_desc *desc);
-char *determine_trustees_mount(void);
+char *determine_securityfs_mount(void);
 unsigned add_trustee(struct dev_desc *dev, const char *path, const char *perm,
  const char *user, callbackptr callback);
 void add_ic_device(struct dev_desc *dev, callbackptr callback);
@@ -174,7 +174,7 @@ char *extract_to_delimiter(const char *s, char end, char **result)
 		fprintf
 		    (stderr, "Problem mallocing mem in extract_between_delimiters: %s\n",
 		     strerror(errno));
-		exit(-1);
+		exit(1);
 	}
 	res[s - origs] = '\0';
 
@@ -236,17 +236,22 @@ unsigned determine_trustees_apiversion(const char *mount)
 	char *line = NULL;
 
 	strcpy(buffer, mount);
-	strcat(buffer, "/apiversion");
+	strcat(buffer, "/trustees/apiversion");
 
 	file = fopen(buffer, "r");
-	if (file)
+	if (!file) {
+		fprintf(stderr, "Could not open %s (%s)\n", buffer, strerror(errno));
+		fprintf(stderr, "Are you sure the trustees module is loaded?\n");
+		exit(1);
+	} else {
 		line = read_line(file);
+	}
 	if (line)
 		return strtol(line, 0, 0);
 	return 0;
 }
 
-char *determine_trustees_mount(void)
+char *determine_securityfs_mount(void)
 {
 	FILE *file;
 	char *line, *device, *mount, *fstype, *options, *num1, *num2;
@@ -269,7 +274,7 @@ char *determine_trustees_mount(void)
 			continue;
 		}
 
-		if (strcmp(fstype, "trusteesfs") == 0) {
+		if (strcmp(fstype, "securityfs") == 0) {
 			fclose(file);
 			return strdup(mount);
 		}
@@ -293,13 +298,8 @@ void print_help_and_exit(void)
 	printf
 	    ("       do not delete all trustees from the kernel before processing\n");
 	printf("       the config file\n");
-	printf("    -t <trustees device file>\n");
-	printf
-	    ("       Specify the root of the mounted trusteesfs filesystem\n");
-	printf("       This can often be automatically detected: %s\n",
-	       trustee_device);
 	printf("\n");
-	exit(-1);
+	exit(1);
 }
 
 int send_trustees_command(struct trustee_command *comm, void **args, unsigned *lens)
@@ -333,7 +333,7 @@ void flush_trustees(void)
 
 	if (!send_trustees_command(&flush, 0, 0)) {
 		fprintf(stderr, "flush_trustees failed\n");
-		exit(-1);
+		exit(1);
 	}
 }
 
@@ -458,9 +458,9 @@ int main(int argc, char **argv)
 	unsigned apiversion;
 	FILE *config = NULL;
 
-	trustee_device = determine_trustees_mount();
+	trustee_device = determine_securityfs_mount();
 
-	while ((j = getopt(argc, argv, "t:f:nhDp:")) != EOF) {
+	while ((j = getopt(argc, argv, "f:nhDp:")) != EOF) {
 		switch (j) {
 		case 'h':
 		case '?':
@@ -475,22 +475,17 @@ int main(int argc, char **argv)
 		case 'f':
 			trustee_config = strdup(optarg);
 			break;
-		case 't':
-			trustee_device = strdup(optarg);
-			break;
 		}
 	}
 
 	if (!trustee_device) {
 		fprintf
-		    (stderr, "Couldn't determine where the trusteesfs was mounted.  You need to\n");
+		    (stderr, "Couldn't determine where the securityfs was mounted.  You need to\n");
 		fprintf
-		    (stderr, "do something like 'mount -t trusteesfs none /place/to/mount' and\n");
+		    (stderr, "do something like 'mount -t securityfs none /sys/kernel/security' and\n");
 		fprintf
-		    (stderr, "run again.  It is possible the mount point could just not be determined\n");
-		fprintf
-		    (stderr, "in which case you should specify it with the -t option.\n");
-		exit(-1);
+		    (stderr, "run again.\n");
+		exit(1);
 	}
 
 	apiversion = determine_trustees_apiversion(trustee_device);
@@ -498,14 +493,14 @@ int main(int argc, char **argv)
 
 	if (apiversion < TRUSTEES_APIVERSION) {
 		fprintf(stderr, "ERROR: You must upgrade your kernel trustees module.\n");
-		exit(-1);
+		exit(1);
 	} else if (apiversion > TRUSTEES_APIVERSION) {
 		fprintf(stderr, "ERROR: You must upgrade your settrustees executable.\n");
-		exit(-1);
+		exit(1);
 	}	
 
 	trustee_device = realloc(trustee_device, strlen(trustee_device) + 50);
-	strcat(trustee_device, "/trustees");
+	strcat(trustee_device, "/trustees/device");
 
 	trustee_file = fopen(trustee_device, "w");
 	if (!trustee_file) {
@@ -513,7 +508,7 @@ int main(int argc, char **argv)
 		    (stderr, "Could not open the trustees device for opening: %s\n",
 		     trustee_device);
 		fprintf(stderr, "The error was %s\n", strerror(errno));
-		exit(-1);
+		exit(1);
 	}
 
 	if (!exitafterflush) {
@@ -525,7 +520,7 @@ int main(int argc, char **argv)
 				fprintf
 				    (stderr, "Could not read config file %s, reason %s\n",
 				     trustee_config, strerror(errno));
-				exit(-1);
+				exit(1);
 			}
 		}
 	}
@@ -558,7 +553,7 @@ int main(int argc, char **argv)
 			line++;
 			if (!parse_line(config, callback)) {
 				fprintf(stderr, "Parse error %s:%u\n", trustee_config, line);
-				exit(-1);
+				exit(1);
 			}
 		}
 		rewind(config);
