@@ -17,7 +17,7 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include "trustees.h"
+#include <linux/trustees.h>
 #include "dynamic_array.h"
 
 char *trustee_device = NULL;
