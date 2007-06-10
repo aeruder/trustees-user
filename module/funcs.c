@@ -1,17 +1,17 @@
 /*
- * Trustees ACL Project 
+ * Trustees ACL Project
  *
  * Copyright (c) 1999-2000 Vyacheslav Zavadsky
- * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu)
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as
  *	published by the Free Software Foundation, version 2.
  *
- * This code contains the functions for handling the actual trustees data 
+ * This code contains the functions for handling the actual trustees data
  * and returning the permissions for a given file, etc.
  *
- * 
+ *
  */
 
 #include <linux/fs.h>
@@ -52,7 +52,7 @@ static int trustee_hash_size = 0, trustee_hash_used =
  */
 static int deepest_level = 0;
 
-/* 
+/*
  * A list of filesystems that need to have their case
  * ignored.  This is protected by trustee_hash_lock.
  */
@@ -60,7 +60,7 @@ static LIST_HEAD(trustee_ic_list);
 
 
 /* The calling method needs to free the buffer created by this function
- * This method returns the filename for a dentry.  This is, of course, 
+ * This method returns the filename for a dentry.  This is, of course,
  * relative to the device.  The filename can be truncated to be as deep as
  * the deepest trustee.  The depth returned in d will always be the true
  * depth, however.
@@ -187,7 +187,7 @@ static inline void add_ic_dev(u32 dev, char *devname)
 	write_unlock(&trustee_hash_lock);
 }
 
-/* 
+/*
  * Remove all ignored-case filesystems.
  */
 static inline void remove_ic_devs(void)
@@ -204,7 +204,7 @@ static inline void remove_ic_devs(void)
 	}
 }
 
-/* 
+/*
  * This frees all the capsules in a trustee element.
  */
 static inline void free_hash_element_list(struct trustee_hash_element *e)
@@ -238,9 +238,9 @@ static inline void free_hash_element(struct trustee_hash_element *e)
 }
 
 
-/* 
- * hashing function researched by Karl Nelson <kenelson @ ece ucdavis edu> 
- * and is used in glib. 
+/*
+ * hashing function researched by Karl Nelson <kenelson @ ece ucdavis edu>
+ * and is used in glib.
  */
 static inline unsigned int hash_string(const char *s)
 {
@@ -262,7 +262,7 @@ static inline unsigned int hash_device(const char *name, dev_t device)
 	if (MAJOR(device) == 0) {
 		return hash_string(name);
 	}
-	
+
 	return new_encode_dev(device);
 }
 
@@ -272,7 +272,7 @@ static inline unsigned int hash_device(const char *name, dev_t device)
  */
 static inline unsigned int hash(const struct trustee_name *name)
 {
-	return hash_string(name->filename) ^ 
+	return hash_string(name->filename) ^
 	       hash_device(name->devname, name->dev);
 }
 
@@ -289,7 +289,7 @@ static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1,
 	return 0;
 }
 
-/* 
+/*
  * Compare two trustee_name's.  Returns 1 if they are are equal
  * otherwise return 0
  */
@@ -298,13 +298,13 @@ static inline int trustee_name_cmp(const struct trustee_name *n1,
 				   unsigned ignore_case)
 {
 	if (trustee_dev_cmp(n1->dev, n2->dev, n1->devname, n2->devname))
-		return ignore_case ? 
+		return ignore_case ?
 		    (strnicmp(n1->filename, n2->filename, PATH_MAX) == 0) :
 		    (strcmp(n1->filename, n2->filename) == 0);
 	return 0;
 }
 
-/* 
+/*
  * Return the trustee element for a name.
  */
 static struct trustee_hash_element *get_trustee_for_name(const struct trustee_name *name,
@@ -315,7 +315,7 @@ static struct trustee_hash_element *get_trustee_for_name(const struct trustee_na
 	if (trustee_hash)
 	{
 		unsigned int i;
-		
+
 		for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size)
 			if ((trustee_hash[i].usage != 1) && (trustee_name_cmp(&trustee_hash[i].name, name, ignore_case))) {
 				item = trustee_hash + i;
@@ -366,7 +366,7 @@ static inline unsigned update_hash_size(void)
 		}
 		write_lock(&trustee_hash_lock);
 		if (trustee_hash) {
-			vfree(new); 
+			vfree(new);
 			return 1;
 		}
 
@@ -411,7 +411,7 @@ static inline unsigned update_hash_size(void)
 				new[j].usage = trustee_hash[i].usage;
 				new[j].name = trustee_hash[i].name;
 				INIT_LIST_HEAD(&(new[j].perm_list));
-				list_splice_init(&(trustee_hash[i].perm_list), 
+				list_splice_init(&(trustee_hash[i].perm_list),
 				                 &(new[j].perm_list));
 				trustee_hash_used++;
 			}
@@ -427,14 +427,14 @@ static inline unsigned update_hash_size(void)
 	return 1;
 }
 
-/* This function does not allocate memory for filename and devname. 
- * It should be allocated at calling level 
+/* This function does not allocate memory for filename and devname.
+ * It should be allocated at calling level
  *
  * Return the trustee element for a name if it exists, otherwise
  * allocate a new element and add to the hash and return that.
  */
 static unsigned getallocate_trustee_for_name
-    (const struct trustee_name *name, struct trustee_permission acl, int *should_free) 
+    (const struct trustee_name *name, struct trustee_permission acl, int *should_free)
 {
 	struct trustee_hash_element *r = NULL;
 	unsigned j;
@@ -484,9 +484,9 @@ static unsigned getallocate_trustee_for_name
 
 /*
  * Get the mask for a trustee name.
- */ 
+ */
 static int get_trustee_mask_for_name(struct trustee_name *name,
-				     int oldmask, int height, 
+				     int oldmask, int height,
 				     struct trustee_hash_element **element,
 				     unsigned ignore_case)
 {
@@ -502,7 +502,7 @@ static int get_trustee_mask_for_name(struct trustee_name *name,
 		if ((height < 0)
 		    && (l->permission.mask & TRUSTEE_ONE_LEVEL_MASK))
 			continue;
-		if (element) { 
+		if (element) {
 			*element = e;
 			element = NULL;
 		}
@@ -531,7 +531,7 @@ static int get_trustee_mask_for_name(struct trustee_name *name,
 	return oldmask;
 }
 
-/* 
+/*
  * Return the mask for a file.
  */
 int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
@@ -564,7 +564,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	if (deepest) *deepest = NULL;
 
 	filecount = file_name + 1;
-	/* Try to handle the unlikely case where the string will be '/' 
+	/* Try to handle the unlikely case where the string will be '/'
 	 * out here to simplify the logic inside the loop.  We do this
 	 * by giving it a string with two nul byte terminators so that it
 	 * will gracefully (and safely) make it through the loop below.
@@ -578,7 +578,7 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 		*filecount = 0;
 		oldmask =
 		    get_trustee_mask_for_name(&trustee_name, oldmask,
-					      height - depth + !is_dir, 
+					      height - depth + !is_dir,
 					      deepest, ignore_case);
 		height++;
 		*filecount = c;
@@ -686,7 +686,7 @@ static int prepare_trustee_name(u32 device, char *devname, char *filename, struc
 	return 1;
 }
 
-/* 
+/*
  * Process a user command
  */
 extern int trustees_process_command(struct trustee_command command,

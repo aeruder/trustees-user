@@ -1,8 +1,8 @@
 /*
- * Trustees ACL Project 
+ * Trustees ACL Project
  *
  * Copyright (c) 1999-2000 Vyacheslav Zavadsky
- * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu)
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as
@@ -11,7 +11,7 @@
  * The security module (LSM API) component of the trustees system
  *
  * One quick note: generally security modules with the LSM are supposed
- * to be solely restrictive modules.  Unless the trustees module were to 
+ * to be solely restrictive modules.  Unless the trustees module were to
  * require that people set all files rwx by all, it could not function
  * as it is meant to function as a solely restrictive module.
  *
@@ -19,9 +19,9 @@
  * In other words, every process is first given full rights to the filesystem.
  * This is the only non-restricting portion of this module, since it -does-
  * in fact give additional permissions.  However, in the inode_permission hook,
- * any rights the user should not have are taken away.  
+ * any rights the user should not have are taken away.
  *
- * Side effects: Posix ACLs or other filesystem-specific permissions are not 
+ * Side effects: Posix ACLs or other filesystem-specific permissions are not
  * honored.  Trustees ACLs can (and do) take into account the standard unix
  * permissions, but any permissions further than that are difficult, to say
  * the least, to take into account.  I, personally, do not find this to
@@ -124,11 +124,11 @@ static inline struct dentry *find_inode_dentry(struct inode *inode,
 	return dentry;
 }
 
-/* 
+/*
  * Return 1 if they are under the same set of trustees
  * otherwise return 0.
  */
-static inline int have_same_trustees(struct dentry *old_dentry, 
+static inline int have_same_trustees(struct dentry *old_dentry,
 				     struct dentry *new_dentry)
 {
 	struct vfsmount *mnt;
@@ -158,9 +158,9 @@ static inline int have_same_trustees(struct dentry *old_dentry,
 
 	is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
 
-	trustee_perm(old_dentry, mnt, old_file_name, ret, old_depth, is_dir, 
+	trustee_perm(old_dentry, mnt, old_file_name, ret, old_depth, is_dir,
 		     &old_deep);
-	trustee_perm(new_dentry, mnt, new_file_name, ret, new_depth, is_dir, 
+	trustee_perm(new_dentry, mnt, new_file_name, ret, new_depth, is_dir,
 		     &new_deep);
 	if (old_deep == new_deep) {
 		ret = 1;
@@ -235,7 +235,7 @@ static int inline trustee_mask_to_normal_mask(int mask, int isdir)
 }
 
 /* This is the meat of the permissions checking.  First it checks for root,
- * otherwise it first checks for any errors finding the dentry/vfsmount for 
+ * otherwise it first checks for any errors finding the dentry/vfsmount for
  * the inode, and then it looks up the dentry in the trustees hash.
  */
 static int trustees_inode_permission(struct inode *inode,
@@ -293,7 +293,7 @@ static int trustees_inode_permission(struct inode *inode,
 
 	is_dir = S_ISDIR(inode->i_mode);
 
-	amask = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir, 
+	amask = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir,
 			     (struct trustee_hash_element **)NULL);
 	dmask = amask >> TRUSTEE_NUM_ACL_BITS;
 
@@ -307,7 +307,7 @@ static int trustees_inode_permission(struct inode *inode,
 	    (amask & TRUSTEE_USE_UNIX_MASK) && (!ret))
 		goto out;
 
-	/* if the file isn't executable, then the trustees shouldn't 
+	/* if the file isn't executable, then the trustees shouldn't
 	 * make it executable
 	 */
 	if ((mask & MAY_EXEC) && !(mode & S_IXOTH) &&
@@ -336,10 +336,10 @@ static int trustees_inode_permission(struct inode *inode,
 }
 
 /* We should only allow hard links under one of two conditions:
- *   1. Its in the same trustee 
+ *   1. Its in the same trustee
  *        - if the two dentries are covered by the same trustee, there shouldn't
  *          be much of a problem with allowing the hardlink to occur.
- *   2. fsuid = 0 
+ *   2. fsuid = 0
  */
 static int trustees_inode_link(struct dentry *old_dentry,
 			       struct inode *dir,

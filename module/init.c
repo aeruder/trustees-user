@@ -1,18 +1,18 @@
 /*
- * Trustees ACL Project 
+ * Trustees ACL Project
  *
  * Copyright (c) 1999-2000 Vyacheslav Zavadsky
- * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu)
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as
  *	published by the Free Software Foundation, version 2.
  *
- * Module initialization and cleanup 
+ * Module initialization and cleanup
  *
  * History:
  *  2002-12-16 trustees 2.10 released by Vyacheslav Zavadsky
- * 
+ *
  */
 
 #include <linux/init.h>

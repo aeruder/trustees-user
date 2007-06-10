@@ -1,8 +1,8 @@
 /*
- * Trustees ACL Project 
+ * Trustees ACL Project
  *
  * Copyright (c) 1999-2000 Vyacheslav Zavadsky
- * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu)
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as
@@ -80,7 +80,7 @@ static struct file_operations trustees_ops_trustees = {
 	.release = trustees_release_trustees
 };
 
-#define TRUSTEES_NUMBER_FILES 3 
+#define TRUSTEES_NUMBER_FILES 3
 struct tree_descr trustees_files[] = {
 	{NULL, NULL, 0},
 	{.name = "trustees",

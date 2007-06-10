@@ -1,14 +1,14 @@
 /*
- * Trustees ACL Project 
+ * Trustees ACL Project
  *
  * Copyright (c) 1999-2000 Vyacheslav Zavadsky
- * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu)
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as
  *	published by the Free Software Foundation, version 2.
  *
- * Structs, defines and function definitions intended for export 
+ * Structs, defines and function definitions intended for export
  *
  */
 
@@ -61,7 +61,7 @@ struct trustee_permission {
 
 #ifndef __KERNEL__
 #ifndef __user
-#define __user 
+#define __user
 #endif
 #endif
 
@@ -74,13 +74,13 @@ struct trustee_command {
 
 #define TRUSTEE_MAX_ARGS 6
 
-/* Starts a table 
- * No arguments 
+/* Starts a table
+ * No arguments
  */
-#define TRUSTEE_COMMAND_TABLE_START 1 
+#define TRUSTEE_COMMAND_TABLE_START 1
 
 /* Ends a table successfully.
- * No arguments 
+ * No arguments
  */
 #define TRUSTEE_COMMAND_TABLE_STOP  2
 
@@ -93,8 +93,8 @@ struct trustee_command {
  */
 #define TRUSTEE_COMMAND_ADD 3
 
-/* Removes all trustees 
- * No arguments 
+/* Removes all trustees
+ * No arguments
  */
 #define TRUSTEE_COMMAND_REMOVE_ALL  2
 

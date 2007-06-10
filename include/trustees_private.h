@@ -1,14 +1,14 @@
 /*
- * Trustees ACL Project 
+ * Trustees ACL Project
  *
  * Copyright (c) 1999-2000 Vyacheslav Zavadsky
- * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu) 
+ * Copyright (c) 2004 Andrew Ruder (aeruder@ksu.edu)
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as
  *	published by the Free Software Foundation, version 2.
  *
- * Private methods and definitions used only within the module. 
+ * Private methods and definitions used only within the module.
  *
  */
 
@@ -46,7 +46,7 @@ struct trustee_permission_capsule {
 #define TRUSTEE_HASH_ELEMENT_NOTUSED 0
 
 struct trustee_hash_element {
-	int usage;      
+	int usage;
 	struct trustee_name name;
 	struct list_head perm_list;
 };
@@ -82,7 +82,7 @@ extern int trustees_process_command(struct trustee_command command,
 
 /*
  * Magic number!
- * 
+ *
  * FIXME: Do I just make this up or is there some system for coming
  * up with magic numbers?
  */
