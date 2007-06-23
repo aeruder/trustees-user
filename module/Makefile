@@ -12,6 +12,8 @@ TRUSTEES_PWD := $(shell pwd)
 CONFIG_TRUSTEES := m
 
 all::
+	rm -f commoncap.c
+	cp -a $(KDIR)/security/commoncap.c commoncap.c
 	$(MAKE) -C $(KDIR) $(ARCHLINE) CONFIG_TRUSTEES=m M=$(TRUSTEES_PWD) modules
 
 install:: all
