@@ -21,5 +21,6 @@ install:: all
 
 clean::
 	$(MAKE) -C $(KDIR) $(ARCHLINE) CONFIG_TRUSTEES=m M=$(TRUSTEES_PWD) clean
+	rm -f commoncap.c Module.symvers
 
 endif
