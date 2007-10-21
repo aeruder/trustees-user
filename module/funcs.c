@@ -174,7 +174,7 @@ static inline void add_ic_dev(u32 dev, char *devname)
 	ic = vmalloc(sizeof(struct trustee_ic));
 	if (!ic) {
 		TS_DEBUG_MSG
-		    ("Seems that we ran out of memory allocating ic!");
+		    ("Seems that we ran out of memory allocating ic!\n");
 		return;
 	}
 
