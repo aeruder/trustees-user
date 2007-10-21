@@ -166,6 +166,7 @@ static inline int have_same_trustees(struct dentry *old_dentry,
 
 	is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
 
+	read_lock(&trustee_hash_lock);
 	trustee_perm(old_dentry, mnt, old_file_name, ret, old_depth, is_dir,
 		     &old_deep);
 	trustee_perm(new_dentry, mnt, new_file_name, ret, new_depth, is_dir,
@@ -173,6 +174,7 @@ static inline int have_same_trustees(struct dentry *old_dentry,
 	if (old_deep == new_deep) {
 		ret = 1;
 	}
+	read_unlock(&trustee_hash_lock);
 
 	kfree(new_file_name);
 out_new_dentry:
@@ -301,8 +303,10 @@ static int trustees_inode_permission(struct inode *inode,
 
 	is_dir = S_ISDIR(inode->i_mode);
 
+	read_lock(&trustee_hash_lock);
 	amask = trustee_perm(dentry, mnt, file_name, ret, depth, is_dir,
 			     (struct trustee_hash_element **)NULL);
+	read_unlock(&trustee_hash_lock);
 	dmask = amask >> TRUSTEE_NUM_ACL_BITS;
 
 	/* no permission if denied */

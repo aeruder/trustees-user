@@ -202,7 +202,17 @@ Now we use settrustees to load the config file into the kernel module.
 	/path/to/settrustees -f /path/to/config
 
 ======
-V. Known Issues/Bugs/"Features"
+V. Kernel Module Parameters
+======
+
+hash_size
+	Default '256'.  Sets size of the trustee hash.  There is a hash
+	table of all the paths with trustees set on them.  A higher number
+	should lower the amount of time needed to find a path in the table
+	but will increase memory.
+
+======
+VI. Known Issues/Bugs/"Features"
 ======
 
 * No ACLs

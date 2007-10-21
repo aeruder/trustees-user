@@ -46,9 +46,9 @@ struct trustee_permission_capsule {
 #define TRUSTEE_HASH_ELEMENT_NOTUSED 0
 
 struct trustee_hash_element {
-	int usage;
 	struct trustee_name name;
 	struct list_head perm_list;
+	struct hlist_node hash_list;
 };
 
 extern char *trustees_filename_for_dentry(struct dentry *dentry, int *d, int trunc);
@@ -63,7 +63,8 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 extern int trustees_process_command(struct trustee_command command,
                                     void **arg, size_t *argsize);
 
-#define TRUSTEE_INITIAL_HASH_SIZE 32
+extern unsigned int trustee_hash_size;
+extern rwlock_t trustee_hash_lock;
 
 #define TRUSTEE_INITIAL_NAME_BUFFER 256
 #define TRUSTEE_HASDEVNAME(TNAME) (MAJOR((TNAME).dev)==0)

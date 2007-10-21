@@ -23,10 +23,16 @@
 
 #include "internal.h"
 
+unsigned int trustee_hash_size = 256;
+
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Trustees ACL System");
 MODULE_AUTHOR("Vyacheslav Zavadsky and Andrew E. Ruder <aeruder@ksu.edu>");
 MODULE_VERSION("2.11");
+
+MODULE_PARM_DESC(hash_size, "Trustees hash size");
+module_param_named(hash_size, trustee_hash_size, uint, 0444);
+
 
 static int __init trustees_init(void)
 {

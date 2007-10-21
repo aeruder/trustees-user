@@ -35,10 +35,8 @@
  * are hashed on a combination of device/filename.  Before reading/writing
  * be sure to take care of the locking of trustee_hash_lock.
  */
-static rwlock_t trustee_hash_lock;
-static struct trustee_hash_element *trustee_hash = NULL;
-static int trustee_hash_size = 0, trustee_hash_used =
-    0, trustee_hash_deleted = 0;
+rwlock_t trustee_hash_lock;
+static struct hlist_head *trustee_hash = NULL;
 
 /*
  * This is the deepest level trustee.  When calculating filenames, we can
@@ -231,9 +229,9 @@ static inline void free_trustee_name(struct trustee_name *name)
  */
 static inline void free_hash_element(struct trustee_hash_element *e)
 {
-	e->usage = TRUSTEE_HASH_ELEMENT_DELETED;
 	free_hash_element_list(e);
 	free_trustee_name(&e->name);
+	vfree(e);
 }
 
 
@@ -276,6 +274,14 @@ static inline unsigned int hash(const struct trustee_name *name)
 }
 
 /*
+ * Return the slot in the trustees_hash where a trustee is located
+ */
+static inline unsigned int hash_slot(const struct trustee_name *name)
+{
+    return hash(name) % trustee_hash_size;
+}
+
+/*
  * Compare two devices.  Return 1 if they are equal otherwise return 0
  */
 static inline int trustee_dev_cmp(dev_t dev1, dev_t dev2, char *devname1,
@@ -305,21 +311,18 @@ static inline int trustee_name_cmp(const struct trustee_name *n1,
 
 /*
  * Return the trustee element for a name.
+ * This should be called with a lock on the trustee_hash (which should
+ * not be released until you are done with the returned hash_element)!
  */
 static struct trustee_hash_element *get_trustee_for_name(const struct trustee_name *name,
 							 unsigned ignore_case)
 {
 	struct trustee_hash_element *item = NULL;
+	struct hlist_node *iter = NULL;
 
-	if (trustee_hash)
-	{
-		unsigned int i;
-
-		for (i = hash(name) % trustee_hash_size; trustee_hash[i].usage; i = (i + 1) % trustee_hash_size)
-			if ((trustee_hash[i].usage != 1) && (trustee_name_cmp(&trustee_hash[i].name, name, ignore_case))) {
-				item = trustee_hash + i;
-				break;
-			}
+	hlist_for_each_entry(item, iter, &trustee_hash[hash_slot(name)], hash_list) {
+		if (trustee_name_cmp(&item->name, name, ignore_case))
+			break;
 	}
 
 	return item;
@@ -347,85 +350,6 @@ static inline void calculate_deepest_level(const struct trustee_name *name)
 	if (level > deepest_level) deepest_level = level;
 }
 
-/* Initializes a new hash size, leaves the trustee_hash_lock locked!! */
-static inline unsigned update_hash_size(void)
-{
-	struct trustee_hash_element *new;
-	unsigned i, j, newsize;
-
-	if (trustee_hash == NULL) {
-		TS_DEBUG_MSG("Building new trustee hash\n");
-
-		new = vmalloc(sizeof(struct trustee_hash_element) *
-		       TRUSTEE_INITIAL_HASH_SIZE);
-		if (!new) {
-			TS_DEBUG_MSG
-			    ("Can not allocate memory for trustee hash\n");
-			return 0;
-		}
-		write_lock(&trustee_hash_lock);
-		if (trustee_hash) {
-			vfree(new);
-			return 1;
-		}
-
-		trustee_hash_used = 0;
-		trustee_hash_deleted = 0;
-		for (i = 0; i < TRUSTEE_INITIAL_HASH_SIZE; i++)
-			new[i].usage = TRUSTEE_HASH_ELEMENT_NOTUSED;
-
-		trustee_hash = new;
-		trustee_hash_size = TRUSTEE_INITIAL_HASH_SIZE;
-	} else if ((trustee_hash_size * 3 / 4 < trustee_hash_used) || (trustee_hash_size - 2 < trustee_hash_used)) {	/*hash needed to be rebuilt, rebuilding hash */
-		newsize =
-		    (trustee_hash_deleted * 3) >
-		    trustee_hash_size ? trustee_hash_size :
-		    trustee_hash_size + TRUSTEE_INITIAL_HASH_SIZE;
-
-		TS_DEBUG_MSG
-		    ("Rebuilding trustee hash, oldsize: %d, newsize %d, deleted %d\n",
-		     trustee_hash_size, newsize, trustee_hash_deleted);
-
-		new = vmalloc(sizeof(struct trustee_hash_element) * newsize);
-		if (!new) {
-			TS_DEBUG_MSG
-			    ("Can not allocate memory for trustee hash\n");
-			return 0;
-		}
-		write_lock(&trustee_hash_lock);
-		if (trustee_hash_size >= newsize) {
-			vfree(new);
-			return 1;
-		}
-
-		for (i = 0; i < newsize; i++)
-			new[i].usage = TRUSTEE_HASH_ELEMENT_NOTUSED;
-
-		trustee_hash_used = 0;
-		for (i = 0; i < trustee_hash_size; i++) {
-			if (trustee_hash[i].usage == TRUSTEE_HASH_ELEMENT_USED) {
-				for (j =
-				     hash(&trustee_hash[i].name) % newsize;
-				     new[j].usage; j = (j + 1) % newsize);
-				new[j].usage = trustee_hash[i].usage;
-				new[j].name = trustee_hash[i].name;
-				INIT_LIST_HEAD(&(new[j].perm_list));
-				list_splice_init(&(trustee_hash[i].perm_list),
-				                 &(new[j].perm_list));
-				trustee_hash_used++;
-			}
-		}
-		vfree(trustee_hash);
-		trustee_hash = new;
-		trustee_hash_size = newsize;
-		trustee_hash_deleted = 0;
-	} else {
-		write_lock(&trustee_hash_lock);
-	}
-
-	return 1;
-}
-
 /* This function does not allocate memory for filename and devname.
  * It should be allocated at calling level
  *
@@ -436,7 +360,6 @@ static unsigned getallocate_trustee_for_name
     (const struct trustee_name *name, struct trustee_permission acl, int *should_free)
 {
 	struct trustee_hash_element *r = NULL;
-	unsigned j;
 	struct trustee_permission_capsule *capsule;
 
 	*should_free = 1;
@@ -449,40 +372,45 @@ static unsigned getallocate_trustee_for_name
 	}
 	capsule->permission = acl;
 
-	if (!update_hash_size()) {
-		write_unlock(&trustee_hash_lock);
-		return 0;
-	}
-
+	write_lock(&trustee_hash_lock);
 	r = get_trustee_for_name(name, 0);
+
 	if (r) {
 		list_add_tail(&capsule->perm_list, &r->perm_list);
 		write_unlock(&trustee_hash_lock);
+		TS_DEBUG_MSG("Added permission capsule to '%s' trustee\n", name->filename);
 		return 1;
 	}
+	write_unlock(&trustee_hash_lock);
 
-	for (j = hash(name) % trustee_hash_size;
-	     trustee_hash[j].usage == TRUSTEE_HASH_ELEMENT_USED; j = (j + 1) % trustee_hash_size);
-	trustee_hash[j].name = *name;
+	r = vmalloc(sizeof(struct trustee_hash_element));
+	if (!r) {
+		TS_DEBUG_MSG("Can not allocate memory for trustee hash element\n");
+		return 0;
+	}
+
+	r->name = *name;
+	INIT_HLIST_NODE(&r->hash_list);
 
 	*should_free = 0;
-	r = trustee_hash + j;
-	INIT_LIST_HEAD(&r->perm_list);
-	r->usage = TRUSTEE_HASH_ELEMENT_USED;
 	calculate_deepest_level(name);
 
-	trustee_hash_used++;
-
+	INIT_LIST_HEAD(&r->perm_list);
 	list_add_tail(&capsule->perm_list, &r->perm_list);
-	TS_DEBUG_MSG("Added element to trustee hash: j %d, name : %s\n", j,
-		     r->name.filename);
+
+	write_lock(&trustee_hash_lock);
+	hlist_add_head(&r->hash_list, &trustee_hash[hash_slot(name)]);
 	write_unlock(&trustee_hash_lock);
+
+	TS_DEBUG_MSG("Created new '%s' trustee\n", name->filename);
 
 	return 1;
 }
 
 /*
  * Get the mask for a trustee name.
+ * This should be called with a lock on the trustee_hash (which should
+ * not be released until you are done with the returned hash_element)!
  */
 static int get_trustee_mask_for_name(struct trustee_name *name,
 				     int oldmask, int height,
@@ -532,6 +460,9 @@ static int get_trustee_mask_for_name(struct trustee_name *name,
 
 /*
  * Return the mask for a file.
+ *
+ * WARNING!
+ * This function requires that you lock/unlock the trustees_hash_lock
  */
 int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 		 char *file_name, int unix_ret, int depth, int is_dir,
@@ -550,7 +481,6 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 	trustee_name.devname = mnt->mnt_devname;
 	trustee_name.filename = file_name;
 
-	read_lock(&trustee_hash_lock);
 	list_for_each_entry(iter, &trustee_ic_list, ic_list) {
 		if (trustee_dev_cmp
 		    (iter->dev, trustee_name.dev, iter->devname,
@@ -586,8 +516,6 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
 
 	} while(*filecount);
 
-	read_unlock(&trustee_hash_lock);
-
 	return oldmask;
 }
 
@@ -596,19 +524,22 @@ int trustee_perm(struct dentry *dentry, struct vfsmount *mnt,
  */
 static void trustees_clear_all(void)
 {
-	int i;
+	struct trustee_hash_element *item = NULL;
+	struct hlist_node *iter, *temp = NULL;
+	unsigned i;
 	write_lock(&trustee_hash_lock);
-	if (trustee_hash) {
-		for (i = 0; i < trustee_hash_size; i++) {
-			if (trustee_hash[i].usage == TRUSTEE_HASH_ELEMENT_USED)
-				free_hash_element(&trustee_hash[i]);
+
+	for (i = 0; i < trustee_hash_size; i++) {
+		hlist_for_each_entry_safe(item, iter, temp, &trustee_hash[i], hash_list) {
+			free_hash_element(item);
 		}
-		vfree(trustee_hash);
-		trustee_hash = NULL;
-		deepest_level = 0;
+		INIT_HLIST_HEAD(&trustee_hash[i]);
 	}
 
+	deepest_level = 0;
+
 	remove_ic_devs();
+
 	write_unlock(&trustee_hash_lock);
 }
 
@@ -617,8 +548,20 @@ static void trustees_clear_all(void)
  */
 int trustees_funcs_init_globals(void)
 {
+	unsigned int iter;
+
+	if (trustee_hash_size <= 0)
+		return 1;
+
 	rwlock_init(&trustee_hash_lock);
-	trustees_clear_all();
+
+	trustee_hash = vmalloc(sizeof(*trustee_hash) * trustee_hash_size);
+	if (!trustee_hash)
+		return 1;
+
+	for (iter = 0; iter < trustee_hash_size; iter++)
+		INIT_HLIST_HEAD(trustee_hash + iter);
+
 	return 0;
 }
 
@@ -628,6 +571,9 @@ int trustees_funcs_init_globals(void)
 int trustees_funcs_cleanup_globals(void)
 {
 	trustees_clear_all();
+
+	vfree(trustee_hash);
+
 	return 0;
 }
 

@@ -1,3 +1,7 @@
+November 7, 2007:
+    Redid caching code, see commit message for more details.  Added hash_size
+    module parameter for setting size of hash table.
+
 June 10, 2007:
     Bumped for kernel 2.6.21, this is now required for trustees.   In the
     future, multiple stable kernel revisions will be supported.
