@@ -402,23 +402,37 @@ unsigned add_trustee(struct dev_desc *dev, const char *path, const char *mstr,
 	dynarray *args = dynarray_init(5);
 
 	if (*user == '+') {
-		struct group *grp = getgrnam(user+1);
-		if (!grp) {
-			fprintf(stderr, "Problem looking up group '%s'\n", user+1);
-			return 0;
+		struct group *grp;
+
+		grp = getgrnam(user+1);
+		if (grp) {
+			perm.u.gid = grp->gr_gid;
+		} else {
+			char *end = NULL;
+			perm.u.gid = (gid_t)strtoll(user+1, &end, 10);
+			if (*end != '\0') {
+				fprintf(stderr, "Problem looking up group '%s'\n", user+1);
+				return 0;
+			}
 		}
-		perm.u.gid = grp->gr_gid;
+
 		perm.mask |= TRUSTEE_IS_GROUP_MASK;
 	} else if (!strcmp(user, "*")) {
 		perm.mask |= TRUSTEE_ALL_MASK;
 	} else {
 		struct passwd *pwd;
+
 		pwd = getpwnam(user);
-		if (!pwd) {
-			fprintf(stderr, "Problem looking up user '%s'\n", user);
-			return 0;
+		if (pwd) {
+			perm.u.uid = pwd->pw_uid;
+		} else {
+			char *end = NULL;
+			perm.u.uid = (uid_t)strtoll(user, &end, 10);
+			if (*end != '\0') {
+				fprintf(stderr, "Problem looking up user '%s'\n", user);
+				return 0;
+			}
 		}
-		perm.u.uid = pwd->pw_uid;
 	}
 
 	if (!add_mask_string(mstr, &(perm.mask))) return 0;
