@@ -30,7 +30,7 @@ I. Introduction
 
 Trustees is an advanced linux permission system inspired by Netware.  It
 allows a system administrator to attach "trustees" to any directory or file.
-All subdirectories and files in that directory will also inherit these 
+All subdirectories and files in that directory will also inherit these
 trustees.  Trustee rights can be overridden or added to in subsequent
 directories.
 
@@ -40,8 +40,8 @@ analyze which ACLs are set where are also equally intricate.  ACLs are designed
 for fine-grained access control.  For example, on my system, giving a user
 write access to all files and directories in usr would require over 140,000
 acls to be set.  Furthermore, how do you check that all these ACLs are what
-you intended them to be?  Quite frankly, you can't.  Enter trustees.  Specify 
-your full system's rights in one small config file and know that your controls 
+you intended them to be?  Quite frankly, you can't.  Enter trustees.  Specify
+your full system's rights in one small config file and know that your controls
 on access are what you intended them to be.
 
 ======
@@ -84,7 +84,7 @@ the -f option to override).  The config file should have one input per line.
 The syntax of the input is described below.
 
 There are two classes of inputs.  There is a device flags input and trustees
-input.  
+input.
 
 device flags
 	The first class, device flags, is specified like this:
@@ -104,25 +104,25 @@ device flags
 
 trustees
 	The second class of input, trustees, are specified like this:
-	
+
 [/block/device]/any/path:usr1:flags:+grp1:flags...
 {/network/share}/any/path:+grp2:flags:*:flags...
-	
+
 	The path should be the real path, no symlinks.  usr1/grp2/usr2/grp1 should
-	be any user/group names.  The preceding '+' distinguishes a group from a 
-	user.  A * designates that it should apply to all users.  The flags 
-	describe the access that the preceding user/group should receive. 
+	be any user/group names.  The preceding '+' distinguishes a group from a
+	user.  A * designates that it should apply to all users.  The flags
+	describe the access that the preceding user/group should receive.
 	Any number of user:flag or group:flag can be specified on a line.
 
 	Also, this path should be relative to the device.  If /home is on its
 	own device, and you want a rule to apply to /home/andy, you would use
-	
+
 		[/block/device]/andy:...
 
 	and NOT
-	
+
 		[/block/device]/home/andy:...
-	
+
 	Flag modifiers are also available which can be used to clear a flag
 	on a certain directory or to deny access instead of allowing access.
 
@@ -130,34 +130,34 @@ trustees
 	   /path/file1
 	First, two sets of flags are initialized: the allow flags and the
 	deny flags.  The allow flags are initialized to [U] (use normal unix
-	access) and the deny flags are initialized to [].  
-	
+	access) and the deny flags are initialized to [].
+
 	Then the allow/deny flags are gathered for /.  The flags here are or'd with
 	the appropriate default flags.  So if / gave everybody RWEBX the allow
 	flags would be [URWEBX] and the deny flags would still be [].  If
 	everybody's flags were instead DRWBX the allow flags would be [U] and the
 	deny flags would be [RWBX].  And lastly, if everybody was set to CU the
 	allow flags would be [] and the deny flags would be [].
-	
+
 	Then the rights are looked up for /path.  The flags here are once again
 	or'd/cleared into the appropriate allow/deny flags as shown above.
 
 	When it has calculated the full allow/deny masks the algorithm is as
-	such:  
-	
+	such:
+
 	1. If superuser, permission granted.
 	2. If any mode requested is in the deny flag, the request is denied.
 	3. If the allow mode specifies [U], the unix permissions are calculated
 	   and if they grant access, access is granted.
 	4. If all modes are in the allow flag, access is granted.
 	5. Permission denied.
-	
+
 	The following flags are available:
-	R 
+	R
 		Read any files
 	W
 		Write files and directories
-	B   
+	B
 		Browse (like UNIX execute for directories)
 	E
 		rEad directories
@@ -171,9 +171,9 @@ trustees
 		Clear the permissions (instead of set them)
 	D
 		Deny access (instead of grant)
-	! 
+	!
 		The trustee object applies to all except user or group
-	O 
+	O
 		One level. The trustee object applies to the given directory and files
 		therein, but not to subdirectories.
 
@@ -181,7 +181,7 @@ Blank lines in the configuration file will be ignored as well as those that
 begin with the character '#'
 
 ======
-IV. Usage 
+IV. Usage
 ======
 
 First, you should load the kernel module.  modprobe trustees.ko should do the
@@ -198,7 +198,7 @@ the 'trustees device'.  Other files available in the filesystem may be
 available to check status of the trustees module, statistics, or to turn
 debugging messages on.
 
-Now we use settrustees to load the config file into the kernel module.  
+Now we use settrustees to load the config file into the kernel module.
 	/path/to/settrustees -f /path/to/config
 
 ======
@@ -214,7 +214,7 @@ V. Known Issues/Bugs/"Features"
 * Hard links
 
   The trustees module has to take some precautions against a file existing
-  with more than one name.  The problem is that if full RWEXB access is 
+  with more than one name.  The problem is that if full RWEXB access is
   given to /tmp, some user joe could make a hardlink of /etc/passwd into
   /tmp and have full access to it!  That is bad!
 
@@ -223,9 +223,9 @@ V. Known Issues/Bugs/"Features"
   their creation.
 
   Basically, if a hard link is requested of a file to another place in the
-  same directory, it is allowed.  If an application tries to make a 
+  same directory, it is allowed.  If an application tries to make a
   inter-directory hard link, it will receive an error code indicating that
-  the two locations are not on the same device. 
+  the two locations are not on the same device.
 
   Similarly, a file that has a hard link count of 2 or more cannot be moved
   out of a directory.  If a file is requested to be moved out of a directory,
@@ -234,7 +234,7 @@ V. Known Issues/Bugs/"Features"
   instead.
 
 * Case insensitivity
-  
+
   Due to lack of intelligence or effort or something, case insensitivity is
   implemented as referring to all files internally as being lowercase.  The
   lowercasing function does not take into account locale.  But assuming you
