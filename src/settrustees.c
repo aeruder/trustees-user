@@ -80,10 +80,7 @@ char *read_line(FILE *file) {
  *
  * Returns 0 if it was unsuccessful at parsing
  */
-unsigned parse_line(FILE *file, callbackptr callback) {
-	const char *line;
-
-	line = read_line(file);
+unsigned parse_line(const char *line, callbackptr callback) {
 	if (!line) return 1;
 
 	switch(line[0]) {
@@ -464,13 +461,14 @@ void add_ic_device(struct dev_desc *dev, callbackptr callback)
 }
 
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
 	char j;
 	int pass;
 	unsigned flush = 1, exitafterflush = 0;
 	unsigned apiversion;
 	FILE *config = NULL;
+	dynarray *config_lines;
 
 	trustee_device = determine_securityfs_mount();
 
@@ -545,6 +543,15 @@ int main(int argc, char **argv)
 	if (exitafterflush)
 		exit(0);
 
+	config_lines = dynarray_init(1000);
+	while (!feof(config)) {
+		char *line;
+		if (!(line = read_line(config))) {
+			break;
+		}
+		dynarray_push(config_lines, line, strlen(line));
+	}
+
 	for (pass = 0; pass < 3; pass++) {
 		unsigned line = 0;
 		callbackptr callback;
@@ -563,14 +570,12 @@ int main(int argc, char **argv)
 				callback = callback_only_permissions;
 				break;
 		}
-		while (!feof(config)) {
-			line++;
-			if (!parse_line(config, callback)) {
+		for (line = 0; line < config_lines->len; line++) {
+			if (!parse_line(config_lines->items[line], callback)) {
 				fprintf(stderr, "Parse error %s:%u\n", trustee_config, line);
 				exit(1);
 			}
 		}
-		rewind(config);
 	}
 
 	fclose(config);
