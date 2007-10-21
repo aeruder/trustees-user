@@ -17,8 +17,8 @@
 #define _LINUX_TRUSTEE_STRUCT_H
 #include <linux/types.h>
 
-#define TRUSTEES_APIVERSION 1
-#define TRUSTEES_APIVERSION_STR "1"
+#define TRUSTEES_APIVERSION 2
+#define TRUSTEES_APIVERSION_STR "2"
 
 #define TRUSTEE_EXECUTE_BIT 0
 #define TRUSTEE_READ_BIT 1
@@ -54,8 +54,8 @@
 struct trustee_permission {
 	trustee_acl mask;
 	union {
-		__kernel_uid_t uid;
-		__kernel_gid_t gid;
+		__kernel_uid32_t uid;
+		__kernel_gid32_t gid;
 	} u;
 };
 
