@@ -31,6 +31,7 @@ struct dev_desc {
 	struct dev_desc *next;
 };
 
+void cleanup_path(char *path);
 unsigned parse_permission_line(const char *line, callbackptr callback);
 unsigned parse_device_characteristic(const char *line, callbackptr callback);
 char *extract_to_delimiter(const char *s, char end, char **result);
@@ -39,6 +40,16 @@ char *determine_securityfs_mount(void);
 unsigned add_trustee(struct dev_desc *dev, const char *path, const char *perm,
  const char *user, callbackptr callback);
 void add_ic_device(struct dev_desc *dev, callbackptr callback);
+
+/* Cleans up a specified path for the kernel module
+ */
+void cleanup_path(char *path)
+{
+	int i;
+	/* Make sure we don't clear out a leading '/' */
+	for (i = strlen(path) - 1; i >= 1 && path[i] == '/'; i++)
+		path[i] = '\0';
+}
 
 /* Read a line from file, the return result is only good until the next call to read_line
  */
@@ -114,6 +125,7 @@ unsigned parse_permission_line(const char *line, callbackptr callback)
 		fprintf(stderr, "No user/group and permission pairs\n");
 		return 0;
 	}
+	cleanup_path(path);
 
 	// Extract user/group and perm pairs
 	while (line) {
