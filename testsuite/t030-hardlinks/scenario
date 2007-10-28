@@ -1,0 +1,19 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# First lets create some files
+should_pass bill write /file1
+should_pass bill write /file2
+should_pass bill write /file3
+
+# Files in same directory should hard link (covered by same trustee)
+should_pass bill link /file1 /file1.ln
+
+# And even in /tmp (covered by same trustee)
+should_pass bill link /file2 /tmp/file2.ln
+
+# But across trustees, that is a nono :(
+should_fail bill link /file3 /etc/file3.ln
+should_fail bill link /file3 /dev/file3.ln
+

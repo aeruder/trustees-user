@@ -1,0 +1,12 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# Make sure the / trustee is working
+should_pass bill write /etc/passwd
+should_pass bill write /file1
+
+# Make sure the /secret trustee is kicking in
+should_fail bill write /secret/file1
+should_fail andy write /secret/test
+

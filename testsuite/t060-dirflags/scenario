@@ -1,0 +1,18 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# Unix perms
+should_pass andy read /secret/test
+
+# Now we test the B and E bits on directories
+should_fail bill opendir /etc
+should_pass bill read /etc/passwd
+
+should_pass bill opendir /secret
+should_fail bill read /secret/test
+
+should_pass bill write /var/test
+should_fail bill read /var/test
+should_pass bill unlink /var/test
+should_fail bill opendir /var

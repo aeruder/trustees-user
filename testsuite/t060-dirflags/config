@@ -1,0 +1,11 @@
+# This is basically the same format as the regular trustees.conf with a
+# couple important differences:
+#
+#    1.) The device is gone, start with a path relative to the created
+#        filesystem
+#    2.) All users/groups are specified in the passwd file for the
+#        testsuite, not the system.
+/secret:bill:CU:bill:ER
+/etc:bill:CU:bill:BR
+/var:bill:CU:bill:WB
+

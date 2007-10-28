@@ -1,0 +1,9 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# It should be ok for bill to rename /tmp, but not /var as /var
+# has a trustee nested inside of it
+
+should_pass bill rename /tmp /tmp2
+should_fail bill rename /var /var2

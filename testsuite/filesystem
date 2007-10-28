@@ -1,0 +1,26 @@
+# Format:
+# <path> <unixperms> <owner> <group>
+# A / at the end of a name means it is a directory
+# Does not auto-create parent directories
+# owner/group are keyed off of 'passwd'
+
+/ 755 andy cool
+/tmpfile 644 andy cool
+
+/tmp/ 777 andy cool
+
+/etc/ 755 andy cool
+/etc/passwd 600 andy cool
+
+/dev/ 755 andy cool
+/dev/hda1 640 andy cool
+
+/secret/ 700 andy cool
+/secret/test 644 andy cool
+/secret/dir/ 755 andy cool
+/secret/dir/test 644 andy cool
+
+/var/ 755 andy cool
+/var/log/ 755 andy cool
+
+

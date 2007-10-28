@@ -1,4 +1,8 @@
 November 7, 2007:
+    Added testsuite.  See testsuite/README for more details.  The actual
+    tests still need to be written, but the framework is mostly there.
+
+November 7, 2007:
     Redid caching code, see commit message for more details.  Added hash_size
     module parameter for setting size of hash table.
 

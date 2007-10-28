@@ -1,0 +1,85 @@
+There are several external files that this testsuite is based off of:
+
+  1.) passwd
+
+      This file defines the users and groups for all the tests/filesystem
+      description.  For example, when you use the name 'andy' in your test
+      trustees configuration file, it does not refer to a system user 'andy',
+      it refers to a user 'andy' defined in this file.
+
+      When the driver runs it will read in this file and maintain a database
+      of users/groups.  It automatically maps these users/groups to high
+      UIDs and GIDs (starts at 100000) to attempt to avoid system conflicts (not
+      that system conflicts are a big deal if they do occur).
+
+      The file format is defined in the 'passwd' file itself.
+
+  2.) filesystem
+
+      This file defines the filesystem that will be built up for each test.
+
+      All paths in this file should be given as absolute paths.  These will be
+      build up in a fake chroot of sorts, so do not worry about conflicts with
+      existing files on your system.
+
+      All the users and groups defined in this file are relative to the
+      'passwd' file defined above.
+
+      The file format is defined in the 'filesystem' file itself.
+
+
+  Tests are defined in subdirectories.  These directories need to have a
+  couple files in them:
+
+
+  3.) tXXX/config
+
+      This file is a trustees.conf-like file that will be used for just this
+      test.  The main difference is that you do not need to specify the
+      device, just specify the absolute path (which will in turn be relative
+      to the filesystem built up by the 'filesystem' file).
+
+      All of the users/groups listed in this file reference the 'passwd' file
+      described above.
+
+      The file format is specified in the 't000-basics/config' file itself.
+
+  4.) tXXX/scenario
+
+      This file describes the actual operations to perform.
+
+      Defined operations:
+
+         write <filename>
+            Attempt to open a file with write permissions.  Will create a file
+            if one does not already exist.
+
+         read <filename>
+            Attempt to open a file with read permissions.
+
+         unlink <filename>
+            Unlink(delete) a file.
+
+         rmdir <directory>
+            Remove a directory.
+
+         mkdir <directory>
+            Create a directory.
+
+         link <oldname> <newname>
+            Create a hardlink from oldname to newname.
+
+         rename <oldname> <newname>
+            Rename a file or directory from oldname to newname.
+
+         opendir <directory>
+            Open a directory for reading.
+
+      The file format is specified in the 't000-basics/scenario' file itself.
+
+  Invoking the test driver:
+
+     ./runtests.rb [tests] (as root)
+
+  If 'tests' is not specified, it will go through all tests in the current
+  working directory in alphabetical order.

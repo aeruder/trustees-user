@@ -1,0 +1,12 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# Handled by trustee
+should_pass bill write /file1
+
+# Not handled by trustee
+should_fail bill write /dev/hda1
+should_fail bill write /dev/hda2
+should_fail bill write /etc/passwd
+

@@ -1,0 +1,19 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# Unix permissions
+should_pass andy write /file1
+should_pass andy read /file1
+
+should_pass joe read /file1
+should_fail joe write /file2
+
+# Trustees should kick in here
+should_pass bill read /file1
+should_pass bill read /dev/hda1
+should_pass bill read /etc/passwd
+should_pass bill write /file3
+should_pass bill write /dev/hda2
+should_pass bill write /etc/passwd
+

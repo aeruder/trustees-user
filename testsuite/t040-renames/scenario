@@ -1,0 +1,24 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# First lets create some files
+should_pass bill write /file1
+should_pass bill write /file2
+should_pass bill write /file3
+
+# Files in same directory should rename (covered by same trustee)
+should_pass bill rename /file1 /file1.rename
+
+# And even in /tmp (covered by same trustee)
+should_pass bill rename /file2 /tmp/file2.rename
+
+# But across trustees, that is a nono :(
+should_fail bill rename /file3 /etc/file3.rename
+should_fail bill rename /file3 /dev/file3.rename
+
+# Now here this should fail into /var (covered by a DW)
+# but should pass on /var/log (still covered by same trustee as /)
+should_fail bill rename /file3 /var/file3.rename
+should_pass bill rename /file3 /var/log/file3.rename
+

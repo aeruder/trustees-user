@@ -1,0 +1,15 @@
+# Format:
+# should_(pass|fail) user operation [argument1 argument2 ...]
+# See the README for the operations.
+
+# Make sure that everyone can really write to things
+should_pass bill write /tmp/file1
+should_pass bill write /etc/passwd
+should_pass joe write /tmp/file1
+should_pass joe write /etc/passwd
+
+# Now, we have denied reading/writing for everyone but joe in /secret...
+should_pass joe write /secret/file1
+should_pass joe read /secret/test
+should_fail bill write /secret/file2
+should_fail bill read /secret/test
