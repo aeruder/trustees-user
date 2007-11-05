@@ -362,16 +362,11 @@ static int trustees_inode_link(struct dentry *old_dentry,
 	return -EXDEV;
 }
 
-/* TODO We have a few renames to protect against:
- *   1. Don't allow people to move hardlinked files into another trustee.
- *      - If someone can move hardlinked files into another trustee, it
- *        poses a security risk since additional permissions may come with
- *        the alternate trustee.
- *   2. We don't want people to move any file that gets different permissions
- *      in one place than another.
- *   3. We don't want people to move any directory where the directory either gets
- *      different permissions, or some file in that directory (or subdirectories thereof)
- *      gets different permissions.
+/* We have a few renames to protect against:
+ *   1. Any file or directory that is affected by different trustees at its
+ *      old location than at its new location.
+ *   2. In the case of a directory, we should protect against moving a directory
+ *      that has trustees set inside of it.  *TODO*
  *
  * In any case above, we return -EXDEV which signifies to the calling program that
  * the files are on different devices, and assuming the program is written correctly
@@ -385,11 +380,6 @@ static int trustees_inode_rename(struct inode *old_dir,
 {
 	if (current->fsuid == 0)
 		return 0;
-
-	if (S_ISDIR(old_dentry->d_inode->i_mode))
-		return 0;
-
-	if (old_dentry->d_inode->i_nlink <= 1) return 0;
 
 	if (have_same_trustees(old_dentry, new_dentry)) return 0;
 
