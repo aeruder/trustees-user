@@ -30,18 +30,18 @@ MODULE_VERSION("2.11");
 
 static int __init trustees_init(void)
 {
-	if (trustees_init_security() != 0) {
+	if (trustees_funcs_init_globals() != 0) {
 		return -EINVAL;
 	}
 
 	if (trustees_init_fs() != 0) {
-		trustees_deinit_security();
+		trustees_funcs_cleanup_globals();
 		return -EINVAL;
 	}
 
-	if (trustees_funcs_init_globals() != 0) {
+	if (trustees_init_security() != 0) {
 		trustees_deinit_fs();
-		trustees_deinit_security();
+		trustees_funcs_cleanup_globals();
 		return -EINVAL;
 	}
 
@@ -50,8 +50,8 @@ static int __init trustees_init(void)
 
 static void __exit trustees_exit(void)
 {
-	trustees_deinit_fs();
 	trustees_deinit_security();
+	trustees_deinit_fs();
 	trustees_funcs_cleanup_globals();
 }
 
