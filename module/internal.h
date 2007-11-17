@@ -69,6 +69,8 @@ extern rwlock_t trustee_hash_lock;
 #define TRUSTEE_INITIAL_NAME_BUFFER 256
 #define TRUSTEE_HASDEVNAME(TNAME) (MAJOR((TNAME).dev)==0)
 
+#define TS_ERR_MSG(...) printk(KERN_ERR "Trustees: " __VA_ARGS__)
+
 #ifdef TRUSTEES_DEBUG
 #define TS_DEBUG_MSG(...) printk(KERN_ERR "Trustees: " __VA_ARGS__)
 #else

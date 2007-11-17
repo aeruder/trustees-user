@@ -79,18 +79,18 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d, int trunc)
 	struct dentry *temp_dentry;
 
 	if (dentry->d_parent == NULL) {
-		TS_DEBUG_MSG("d_parent is null\n");
+		TS_ERR_MSG("d_parent is null\n");
 		return NULL;
 	}
 
 	if (dentry->d_name.name == NULL) {
-		TS_DEBUG_MSG("name is null\n");
+		TS_ERR_MSG("name is null\n");
 		return NULL;
 	}
 
 	buffer = kmalloc(FN_CHUNK_SIZE, GFP_KERNEL);
 	if (!buffer) {
-		TS_DEBUG_MSG("could not allocate filename buffer\n");
+		TS_ERR_MSG("could not allocate filename buffer\n");
 		return NULL;
 	}
 
@@ -112,7 +112,7 @@ char *trustees_filename_for_dentry(struct dentry *dentry, int *d, int trunc)
 			tmpbuf = kmalloc(bufsize, GFP_KERNEL);
 			if (!tmpbuf) {
 				kfree(buffer);
-				TS_DEBUG_MSG
+				TS_ERR_MSG
 				    ("Out of memory allocating tmpbuf\n");
 				return NULL;
 			}
@@ -152,17 +152,17 @@ static inline void add_ic_dev(u32 dev, char *devname)
 	dev_len = strlen(devname);
 
 	if (dev_len > PATH_MAX) {
-		TS_DEBUG_MSG("devname bad, add_ic_dev ignored.\n");
+		TS_ERR_MSG("devname bad, add_ic_dev ignored.\n");
 		return;
 	}
 
 	if (!dev_len) {
-		TS_DEBUG_MSG("No devname specified in add_ic_dev.\n");
+		TS_ERR_MSG("No devname specified in add_ic_dev.\n");
 		return;
 	}
 	devname2 = vmalloc(dev_len + 1);
 	if (!devname2) {
-		TS_DEBUG_MSG
+		TS_ERR_MSG
 		    ("Seems that we have ran out of memory adding ic dev!\n");
 		return;
 	}
@@ -171,7 +171,7 @@ static inline void add_ic_dev(u32 dev, char *devname)
 
 	ic = vmalloc(sizeof(struct trustee_ic));
 	if (!ic) {
-		TS_DEBUG_MSG
+		TS_ERR_MSG
 		    ("Seems that we ran out of memory allocating ic!\n");
 		return;
 	}
@@ -366,7 +366,7 @@ static unsigned getallocate_trustee_for_name
 
 	capsule = vmalloc(sizeof(struct trustee_permission_capsule));
 	if (!capsule) {
-		TS_DEBUG_MSG
+		TS_ERR_MSG
 		    ("Can not allocate memory for trustee capsule\n");
 		return 0;
 	}
@@ -385,7 +385,7 @@ static unsigned getallocate_trustee_for_name
 
 	r = vmalloc(sizeof(struct trustee_hash_element));
 	if (!r) {
-		TS_DEBUG_MSG("Can not allocate memory for trustee hash element\n");
+		TS_ERR_MSG("Can not allocate memory for trustee hash element\n");
 		return 0;
 	}
 
@@ -592,18 +592,18 @@ static int prepare_trustee_name(u32 device, char *devname, char *filename, struc
 	devl = strlen(devname);
 
 	if (devl > PATH_MAX) {
-		TS_DEBUG_MSG("device name bad, command ignored.\n");
+		TS_ERR_MSG("device name bad, command ignored.\n");
 		return 0;
 	}
 	if (filel > PATH_MAX) {
-		TS_DEBUG_MSG("file name bad, command ignored.\n");
+		TS_ERR_MSG("file name bad, command ignored.\n");
 		return 0;
 	}
 
 	if (devl) {
 		devb = vmalloc(devl+1);
 		if (!devb) {
-			TS_DEBUG_MSG("Couldn't allocate mem for devb.\n");
+			TS_ERR_MSG("Couldn't allocate mem for devb.\n");
 			return 0;
 		}
 
@@ -614,7 +614,7 @@ static int prepare_trustee_name(u32 device, char *devname, char *filename, struc
 	if (filel) {
 		fileb = vmalloc(filel+1);
 		if (!fileb) {
-			TS_DEBUG_MSG("Couldn't allocate mem for fileb.\n");
+			TS_ERR_MSG("Couldn't allocate mem for fileb.\n");
 			vfree(devb);
 			return 0;
 		}

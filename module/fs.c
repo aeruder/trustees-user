@@ -213,7 +213,7 @@ static ssize_t trustees_read_apiversion(struct file *filp, char __user * buf,
 static void cleanup_reader(struct trustee_command_reader *reader) {
 	int z;
 	if (!reader) {
-		TS_DEBUG_MSG("How does reader disappear on us?\n");
+		TS_ERR_MSG("How does reader disappear on us?\n");
 		return;
 	}
 
@@ -238,11 +238,11 @@ static ssize_t trustees_write_trustees(struct file *filp,
 		}
 		if (copy_from_user(&reader->command, buf, count)) {
 			reader->command.command = 0;
-			TS_DEBUG_MSG("copy_from_user failed on command\n");
+			TS_ERR_MSG("copy_from_user failed on command\n");
 			return -EIO;
 		}
 		if (reader->command.numargs > TRUSTEE_MAX_ARGS) {
-			TS_DEBUG_MSG("Too many arguments specified for command %d\n",
+			TS_ERR_MSG("Too many arguments specified for command %d\n",
 			  reader->command.command);
 			return -EIO;
 		}
@@ -257,7 +257,7 @@ static ssize_t trustees_write_trustees(struct file *filp,
 		reader->curarg++;
 		if (copy_from_user(reader->arg[curarg], buf, count)) {
 			cleanup_reader(reader);
-			TS_DEBUG_MSG("copy_from_user failed on arg\n");
+			TS_ERR_MSG("copy_from_user failed on arg\n");
 			return -EIO;
 		}
 	}

@@ -148,19 +148,19 @@ static inline int have_same_trustees(struct dentry *old_dentry,
 
 	mnt = find_inode_mnt(old_dentry->d_inode, NULL);
 	if (unlikely(!mnt)) {
-		printk(KERN_ERR "Trustees: inode does not have a mnt!\n");
+		TS_ERR_MSG("inode does not have a mnt!\n");
 		return 0;
 	}
 
 	old_file_name = trustees_filename_for_dentry(old_dentry, &old_depth, 1);
 	if (!old_file_name) {
-		printk(KERN_ERR "Trustees: Couldn't allocate filename\n");
+		TS_ERR_MSG("Couldn't allocate filename\n");
 		goto out_old_dentry;
 	}
 
 	new_file_name = trustees_filename_for_dentry(new_dentry, &new_depth, 1);
 	if (!new_file_name) {
-		printk(KERN_ERR "Trustees: Couldn't allocate filename\n");
+		TS_ERR_MSG("Couldn't allocate filename\n");
 		goto out_new_dentry;
 	}
 
@@ -268,7 +268,7 @@ static int trustees_inode_permission(struct inode *inode,
 
 	mnt = find_inode_mnt(inode, nd);
 	if (unlikely(!mnt)) {
-		printk(KERN_ERR "Trustees: inode does not have a mnt!\n");
+		TS_ERR_MSG("inode does not have a mnt!\n");
 		return -EACCES;	/* has_unix_perm(inode, mask); */
 	}
 
@@ -288,15 +288,14 @@ static int trustees_inode_permission(struct inode *inode,
 			 * is something that I need to worry about.
 			 */
 			dump_stack();	/* DEBUG FIXME */
-			TS_DEBUG_MSG("Inode number: %ld\n", inode->i_ino);
-			printk(KERN_ERR
-			       "Trustees: dentry does not exist!\n");
+			TS_ERR_MSG("Inode number: %ld\n", inode->i_ino);
+			TS_ERR_MSG("dentry does not exist!\n");
 			goto out_mnt;
 		}
 	}
 	file_name = trustees_filename_for_dentry(dentry, &depth, 1);
 	if (!file_name) {
-		printk(KERN_ERR "Trustees: Couldn't allocate filename\n");
+		TS_ERR_MSG("Couldn't allocate filename\n");
 		ret = -EACCES;
 		goto out_dentry;
 	}
@@ -410,7 +409,7 @@ int trustees_init_security(void)
 	 * things to worry about. Comprende?
 	 */
 	if (register_security(&trustees_security_ops)) {
-		TS_DEBUG_MSG("Could not register security component\n");
+		TS_ERR_MSG("Could not register security component\n");
 		return -EINVAL;
 	}
 
@@ -422,7 +421,7 @@ int trustees_init_security(void)
 void trustees_deinit_security(void)
 {
 	if (unregister_security(&trustees_security_ops)) {
-		TS_DEBUG_MSG
+		TS_ERR_MSG
 		    ("Failure unregistering security component...\n");
 	}
 }
