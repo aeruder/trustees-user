@@ -1,10 +1,11 @@
-The trustees project is an advanced linux permission system inspired by Netware.
+The trustees project is an advanced linux permission system inspired by
+Netware.
 
 Copyright (C) V.L. Zavadsky, 1999-2000
-Copyright (C) Andrew Ruder,  2004 (aeruder@ksu.edu)
+Copyright (C) Andrew Ruder,  2004-2007 (andy@aeruder.net)
 
 Current Maintainer:
-	Andrew Ruder <aeruder@ksu.edu>
+	Andrew Ruder <andy@aeruder.net>
 
 Other Authors/Contributors:
 	Krystian Baclawski
@@ -29,62 +30,79 @@ I. Introduction
 ======
 
 Trustees is an advanced linux permission system inspired by Netware.  It
-allows a system administrator to attach "trustees" to any directory or file.
-All subdirectories and files in that directory will also inherit these
-trustees.  Trustee rights can be overridden or added to in subsequent
-directories.
+allows a system administrator to attach "trustees" to any directory or
+file.  All subdirectories and files in that directory will also inherit
+these trustees.  Trustee rights can be overridden or added to in
+subsequent directories.
 
-Why not use POSIX ACLs?  POSIX ACLs are useful, but require intricate scripts
-to maintain some sort of recursive ACL scheme.  Furthermore, the tools to just
-analyze which ACLs are set where are also equally intricate.  ACLs are designed
-for fine-grained access control.  For example, on my system, giving a user
-write access to all files and directories in usr would require over 140,000
-acls to be set.  Furthermore, how do you check that all these ACLs are what
-you intended them to be?  Quite frankly, you can't.  Enter trustees.  Specify
-your full system's rights in one small config file and know that your controls
-on access are what you intended them to be.
+Why not use POSIX ACLs?  POSIX ACLs are useful, but require intricate
+scripts to maintain some sort of recursive ACL scheme.  Furthermore, the
+tools to just analyze which ACLs are set where are also equally
+intricate.  ACLs are designed for fine-grained access control.  For
+example, on my system, giving a user write access to all files and
+directories in usr would require over 140,000 acls to be set.
+Furthermore, how do you check that all these ACLs are what you intended
+them to be?  Quite frankly, you can't.  Enter trustees.  Specify your
+full system's rights in one small config file and know that your
+controls on access are what you intended them to be.
 
 ======
 II. Installation
 ======
 
-the kernel module
+There are two components to the trustees system.  First, there is a
+kernel component.  This is distributed in a git repository available at
+either:
 
-	-=THIS STEP IS UNNECESSARY IF YOU USED THE KERNEL PATCH=-
+	http://git.aeruder.net/trustees-kernel.git
+	git://git.aeruder.net/trustees-kernel.git
 
-	The included module can be compiled for any 2.6.x kernel. CONFIG_SECURITY,
-	however, must be compiled in.  Assuming this is so, simply enter the
-	module/ directory and type
+Since these are such large repositories, it would be very helpful if
+you'd use the following commands to grab the repository:
 
-	make install
+mkdir trustees-kernel
+cd trustees-kernel
+git init
+git remote add linus git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux-2.6.git
+git remote add origin git://git.aeruder.net/trustees-kernel.git
+git fetch --no-tags linus
+git fetch origin
+git reset --hard origin/<branch>
 
-	For non-typical situations, the makefile may not be able to find your
-	kernel source directory.  If you have problems, try compiling with
+<branch> is what branch you'd like to pull from the trustees repository.
+See git-branch -r for a list.  Most of the time you'd like one of the
+2.6.xx-maint versions which more or less keep up-to-date with the stable
+releases of the kernels (2.6.xx.yy).
 
-	make KDIR=/path/to/src/linux-2.6.x install
+Then to grab new changes, simply:
 
-	After you install trustees, you will need to run
+git fetch origin
+git merge origin/<branch>
 
-	depmod -a
+If you'd like to switch to another branch, do a:
 
-	To rebuild your module dependencies file.
+git reset --hard origin/<newbranch>
 
-the settrustees tool
 
-	Simple enter the src/ directory and type make.  This will build the
-	settrustees tool.
+
+
+The second component of trustees is the userspace portion (with which
+this README is distributed).
+
+Simply enter the src/ directory and type make.  This will build the
+settrustees tool.
 
 ======
 III. Configuration
 ======
 
 The default location for the config file should be /etc/trustees.conf
-This is where the settrustees code will look at by default.  (You can use
-the -f option to override).  The config file should have one input per line.
-The syntax of the input is described below.
+This is where the settrustees code will look at by default.  (You can
+use the -f option to override).  The config file should have one input
+per line.  The syntax of the input is described below.
 
-There are two classes of inputs.  There is a device flags input and trustees
-input.
+There are two classes of inputs.  There is a device flags input and
+trustees input.
 
 device flags
 	The first class, device flags, is specified like this:
@@ -92,11 +110,12 @@ device flags
 *[/block/device]flags
 *{/network/share}flags
 
-	This is used to tell the trustees kernel module certain information about a
-	device.  For example, this is used to specify a case-insensitive
-	filesystem.  If the trustees kernel module doesn't know that a filesystem
-	is case-insensitive, it may give different rights to //smb/share/DIR1 than
-	it gives to //smb/share/dir1 even though they are the same directory.
+	This is used to tell the trustees kernel module certain information
+	about a device.  For example, this is used to specify a
+	case-insensitive filesystem.  If the trustees kernel module doesn't
+	know that a filesystem is case-insensitive, it may give different
+	rights to //smb/share/DIR1 than it gives to //smb/share/dir1 even
+	though they are the same directory.
 
 	Available device flags:
 	I
@@ -108,14 +127,16 @@ trustees
 [/block/device]/any/path:usr1:flags:+grp1:flags...
 {/network/share}/any/path:+grp2:flags:*:flags...
 
-	The path should be the real path, no symlinks.  usr1/grp2/usr2/grp1 should
-	be any user/group names.  The preceding '+' distinguishes a group from a
-	user.  A * designates that it should apply to all users.  The flags
-	describe the access that the preceding user/group should receive.
-	Any number of user:flag or group:flag can be specified on a line.
+	The path should be the real path, no symlinks.  usr1/grp2/usr2/grp1
+	should be any user/group names.  The preceding '+' distinguishes a
+	group from a user.  A * designates that it should apply to all
+	users.  The flags describe the access that the preceding user/group
+	should receive.  Any number of user:flag or group:flag can be
+	specified on a line.
 
-	Also, this path should be relative to the device.  If /home is on its
-	own device, and you want a rule to apply to /home/andy, you would use
+	Also, this path should be relative to the device.  If /home is on
+	its own device, and you want a rule to apply to /home/andy, you
+	would use
 
 		[/block/device]/andy:...
 
@@ -127,20 +148,24 @@ trustees
 	on a certain directory or to deny access instead of allowing access.
 
 	This is how the permissions are calculated on a file called:
+
 	   /path/file1
+
 	First, two sets of flags are initialized: the allow flags and the
 	deny flags.  The allow flags are initialized to [U] (use normal unix
 	access) and the deny flags are initialized to [].
 
-	Then the allow/deny flags are gathered for /.  The flags here are or'd with
-	the appropriate default flags.  So if / gave everybody RWEBX the allow
-	flags would be [URWEBX] and the deny flags would still be [].  If
-	everybody's flags were instead DRWBX the allow flags would be [U] and the
-	deny flags would be [RWBX].  And lastly, if everybody was set to CU the
-	allow flags would be [] and the deny flags would be [].
+	Then the allow/deny flags are gathered for /.  The flags here are
+	or'd with the appropriate default flags.  So if / gave everybody
+	RWEBX the allow flags would be [URWEBX] and the deny flags would
+	still be [].  If everybody's flags were instead DRWBX the allow
+	flags would be [U] and the deny flags would be [RWBX].  And lastly,
+	if everybody was set to CU the allow flags would be [] and the deny
+	flags would be [].
 
-	Then the rights are looked up for /path.  The flags here are once again
-	or'd/cleared into the appropriate allow/deny flags as shown above.
+	Then the rights are looked up for /path.  The flags here are once
+	again or'd/cleared into the appropriate allow/deny flags as shown
+	above.
 
 	When it has calculated the full allow/deny masks the algorithm is as
 	such:
@@ -177,26 +202,26 @@ trustees
 		One level. The trustee object applies to the given directory and files
 		therein, but not to subdirectories.
 
-Blank lines in the configuration file will be ignored as well as those that
-begin with the character '#'
+Blank lines in the configuration file will be ignored as well as those
+that begin with the character '#'
 
 ======
 IV. Usage
 ======
 
-First, you should load the kernel module.  modprobe trustees.ko should do the
-trick.
+First, you should load the kernel module.  modprobe trustees.ko should
+do the trick.
 
-For the settrustees program to communicate with the kernel module a virtual
-filesystem must be mounted (securityfs):
+For the settrustees program to communicate with the kernel module a
+virtual filesystem must be mounted (securityfs):
 
 mount -t securityfs none /sys/kernel/security
 
-This filesystem will have a file called 'device' which is the file actually
-used to communicate directly with the kernel module.  This is referred to as
-the 'trustees device'.  Other files available in the filesystem may be
-available to check status of the trustees module, statistics, or to turn
-debugging messages on.
+This filesystem will have a file called 'device' which is the file
+actually used to communicate directly with the kernel module.  This is
+referred to as the 'trustees device'.  Other files available in the
+filesystem may be available to check status of the trustees module,
+statistics, or to turn debugging messages on.
 
 Now we use settrustees to load the config file into the kernel module.
 	/path/to/settrustees -f /path/to/config
@@ -206,6 +231,7 @@ V. Kernel Module Parameters
 ======
 
 hash_size
+
 	Default '256'.  Sets size of the trustee hash.  There is a hash
 	table of all the paths with trustees set on them.  A higher number
 	should lower the amount of time needed to find a path in the table
@@ -218,43 +244,34 @@ VI. Known Issues/Bugs/"Features"
 * No ACLs
 
   POSIX ACLs are not in any way supported by trustees.  If you use them,
-  they will be ignored while trustees is loaded.  Sorry, folks,
-  you either use trustees or you don't use trustees.
+  they will be ignored while trustees is loaded.  Sorry, folks, you
+  either use trustees or you don't use trustees.
 
-* Hard links
+* Hard links/renaming
 
-  The trustees module has to take some precautions against a file existing
-  with more than one name.  The problem is that if full RWEXB access is
-  given to /tmp, some user joe could make a hardlink of /etc/passwd into
-  /tmp and have full access to it!  That is bad!
-
-  The trustees module can do nothing against cross-directory hard links that
-  exist prior it to it loading, but while it is loading it attempts to stop
-  their creation.
-
-  Basically, if a hard link is requested of a file to another place in the
-  same directory, it is allowed.  If an application tries to make a
-  inter-directory hard link, it will receive an error code indicating that
-  the two locations are not on the same device.
-
-  Similarly, a file that has a hard link count of 2 or more cannot be moved
-  out of a directory.  If a file is requested to be moved out of a directory,
-  a return code is given that indicates that the two locations are on different
-  devices.  Programs such as mv and others should compensate and perform a copy
-  instead.
+  Basically, the general rule dealing with renames and hard links is
+  that no hard link or rename may be made between directories covered by
+  different trustees.  Furthermore, if you are renaming a directory, it
+  may not contain any trustees in subdirectories of that directory.  In
+  any case where it fails, an error code indicating that the source and
+  destination are on different devices will be returned.  Some
+  well-behaved programs should fall back to copy+delete (at least in the
+  rename case) which will hit all the trustees correctly.
 
 * Case insensitivity
 
-  Due to lack of intelligence or effort or something, case insensitivity is
-  implemented as referring to all files internally as being lowercase.  The
-  lowercasing function does not take into account locale.  But assuming you
-  aren't specifing trustees to directories with strange non-C-locale
-  capital/lowercase characters, it shouldn't affect anything.  For example,
-  don't specify a trustee to a directory with a capital umlauted 'O' and expect
-  the trustees module to work nicely with it.
+  Due to lack of intelligence or effort or something, case insensitivity
+  is implemented as referring to all files internally as being
+  lowercase.  The lowercasing function does not take into account
+  locale.  But assuming you aren't specifing trustees to directories
+  with strange non-C-locale capital/lowercase characters, it shouldn't
+  affect anything.  For example, don't specify a trustee to a directory
+  with a capital umlauted 'O' and expect the trustees module to work
+  nicely with it.
 
   This only applies to directories you are actually specifying in your
-  trustees.conf.  If you have strange characters in your file/directory names
-  that is fine, but you won't be able to specifically mention them in your
-  trustees.conf file.  (They will still inherit trustee permissions correctly.)
+  trustees.conf.  If you have strange characters in your file/directory
+  names that is fine, but you won't be able to specifically mention them
+  in your trustees.conf file.  (They will still inherit trustee
+  permissions correctly.)
 

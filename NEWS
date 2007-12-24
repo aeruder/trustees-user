@@ -1,3 +1,11 @@
+Note: I try to write very descriptive log messages when I commit changes.
+Run git log for much more information.
+
+December 24, 2007:
+	Finished split of userspace/kernel portion of trustees.  From now
+	on, trustees will be developed as a fork of the vanilla kernel.
+	This is much simpler to manage updating for newer kernels.
+
 November 7, 2007:
     Added testsuite.  See testsuite/README for more details.  The actual
     tests still need to be written, but the framework is mostly there.

@@ -1,6 +1,0 @@
-.*.cmd
-trustees.ko
-trustees.mod.c
-.tmp_versions
-Module.symvers
-commoncap.c
