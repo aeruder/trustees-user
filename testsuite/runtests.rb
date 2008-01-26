@@ -87,14 +87,14 @@ class UsersAndGroups
         line.gsub! /\s+/, ""
 
         case line
-          when CommentRegex:
-          when /^\w+$/:
+          when CommentRegex then
+          when /^\w+$/ then
             add_user line
-          when /^:([\w,]+)$/:
+          when /^:([\w,]+)$/ then
             $1.split(",").reject { |key| key.empty? }.each { |group|
               add_group group
             }
-          when /^(\w+):([\w,]+)$/:
+          when /^(\w+):([\w,]+)$/ then
             user,groups = $1,$2
             add_user user
             groups.split(",").reject { |key| key.empty? }.each { |group|
@@ -181,8 +181,8 @@ class Filesystem
         line.strip!
 
         case line
-          when CommentRegex:
-          when /^(\/[\/\w_-]*)\s+([0-7]+)\s+(\w+)\s+(\w+)$/:
+          when CommentRegex then
+          when /^(\/[\/\w_-]*)\s+([0-7]+)\s+(\w+)\s+(\w+)$/ then
             @entries.push( {
               :entry => $1,
               :mode => $2.to_i(8),
@@ -197,7 +197,7 @@ class Filesystem
   end
 
   def teardown
-    if File.exists? @directory and not File.directory? @directory then
+    if File.exist? @directory and not File.directory? @directory then
       raise "Something exists at '#{@directory}' but it isn't a file..."
     end
     if File.directory? @directory then
@@ -214,7 +214,7 @@ class Filesystem
   end
 
   def setup(passwd)
-    if File.exists? @directory then
+    if File.exist? @directory then
       raise "Something exists at '#{@directory} already..."
     end
 
@@ -296,8 +296,8 @@ class TrusteesConfig
         line.strip!
 
         case line
-          when CommentRegex:
-          when /^(\/[\/\w_-]*):(.*)$/:
+          when CommentRegex then
+          when /^(\/[\/\w_-]*):(.*)$/ then
             path = $1
             perms = $2.gsub(/\s+/, "").split(/:/)
             if perms.length % 2 != 0 then
@@ -359,8 +359,8 @@ class Test
         line.strip!
 
         case line
-          when CommentRegex:
-          when /^should_(pass|fail)\s+(\w+)\s+(\w+)\s+(.*)/:
+          when CommentRegex then
+          when /^should_(pass|fail)\s+(\w+)\s+(\w+)\s+(.*)/ then
             state = ($1 == "pass" ? true : false)
             user,operation = $2, $3
             args=$4.split(/\s+/)
