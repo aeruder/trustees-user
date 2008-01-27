@@ -379,8 +379,10 @@ class Test
   def handle_entry(entry, passwd, filesystem)
     groups = Process.groups
     usergroups = passwd.groups_for_user(entry[:user])
-    $stderr.puts "*** Switching to #{entry[:user]}:#{usergroups.join(",")}"
-    $stderr.puts "*** Test: should_#{entry[:state] ? "pass" : "fail" } #{entry[:user]} #{entry[:operation]} #{entry[:args].join(" ")}"
+    uname = "#{entry[:user]}(#{passwd.uid_for_user(entry[:user])})"
+    gnames = usergroups.map{ |x| "#{x}(#{passwd.gid_for_group(x)})" }.join(",")
+    $stderr.puts "*** Switching to #{uname}:#{gnames}"
+    $stderr.puts "*** Test: should_#{entry[:state] ? "pass" : "fail" } #{uname} #{entry[:operation]} #{entry[:args].join(" ")}"
     Process.groups = usergroups.map { |grp| passwd.gid_for_group(grp) }
     Process.euid = passwd.uid_for_user(entry[:user])
 
